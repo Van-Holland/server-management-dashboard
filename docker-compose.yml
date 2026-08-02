@@ -1,0 +1,7 @@
+services:
+  server-dashboard:
+    build: .
+    container_name: server-dashboard
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
