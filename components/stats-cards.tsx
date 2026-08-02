@@ -100,12 +100,22 @@ function SystemCard({ cpu, ram }: { cpu: number; ram: number }) {
   )
 }
 
-export function StatsCards() {
+export function StatsCards({
+  ssd,
+  hdd,
+  cpu,
+  ram,
+}: {
+  ssd: { usedGb: number; totalGb: number }
+  hdd: { usedGb: number; totalGb: number }
+  cpu: number
+  ram: number
+}) {
   return (
     <section aria-label="System stats" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <DiskCard label="SSD" usedGb={384} totalGb={512} icon={HardDrive} />
-      <DiskCard label="HDD" usedGb={11040} totalGb={12000} icon={Database} />
-      <SystemCard cpu={42} ram={73} />
+      <DiskCard label="SSD" usedGb={ssd.usedGb} totalGb={ssd.totalGb} icon={HardDrive} />
+      <DiskCard label="HDD" usedGb={hdd.usedGb} totalGb={hdd.totalGb} icon={Database} />
+      <SystemCard cpu={cpu} ram={ram} />
     </section>
   )
 }
