@@ -13,7 +13,7 @@ export default async function HomePage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
       <div className="flex flex-col gap-10">
-        <HeaderBar />
+        <HeaderBar uptime={stats.uptime} />
         <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} />
         <AppsSection />
       </div>

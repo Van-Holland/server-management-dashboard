@@ -7,6 +7,7 @@ export type SystemStats = {
   hdd: DiskStats
   cpu: number
   ram: number
+  uptime: string
 }
 
 // Uses Node's built-in statfs syscall wrapper instead of shelling out to `df` —
@@ -55,12 +56,22 @@ async function getRamStats(): Promise<number> {
   return Math.round(usedPct)
 }
 
+// /proc/uptime's first number is seconds since boot.
+async function getUptime(): Promise<string> {
+  const raw = await readFile("/host/proc/uptime", "utf-8")
+  const totalSeconds = Math.floor(Number.parseFloat(raw.split(" ")[0]))
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  return `${days}d ${hours}h`
+}
+
 export async function getSystemStats(): Promise<SystemStats> {
-  const [ssd, hdd, cpu, ram] = await Promise.all([
+  const [ssd, hdd, cpu, ram, uptime] = await Promise.all([
     getDiskStats("/host/root"),
     getDiskStats("/host/storage8tb"),
     getCpuStats(),
     getRamStats(),
+    getUptime(),
   ])
-  return { ssd, hdd, cpu, ram }
+  return { ssd, hdd, cpu, ram, uptime }
 }

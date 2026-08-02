@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Server } from "lucide-react"
 
-export function HeaderBar() {
+export function HeaderBar({ uptime }: { uptime: string }) {
   const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export function HeaderBar() {
           <div className="mt-0.5 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-online/15 px-2 py-0.5 text-xs font-medium text-status-online">
               <span className="size-1.5 rounded-full bg-status-online" aria-hidden="true" />
-              Uptime 27d 14h
+              Uptime {uptime}
             </span>
           </div>
         </div>
