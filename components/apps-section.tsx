@@ -20,7 +20,6 @@ type App = {
   description: string
   href: string
   icon: LucideIcon
-  online: boolean
 }
 
 type Group = {
@@ -28,29 +27,34 @@ type Group = {
   apps: App[]
 }
 
+// Tailscale IP:port for each service — matches the ports confirmed live via
+// `docker ps` on mulderserver. No `tailscale serve`, no per-app hostnames —
+// deliberate choice, same as the rest of the homelab (see instructions.md).
+const TS_IP = "100.69.6.89"
+
 const groups: Group[] = [
   {
     title: "Media",
     apps: [
-      { name: "Jellyfin", description: "Media server", href: "#", icon: Clapperboard, online: true },
-      { name: "Immich", description: "Photos & videos", href: "#", icon: Images, online: true },
+      { name: "Jellyfin", description: "Media server", href: `http://${TS_IP}:8096`, icon: Clapperboard },
+      { name: "Immich", description: "Photos & videos", href: `http://${TS_IP}:2283`, icon: Images },
     ],
   },
   {
     title: "Automation",
     apps: [
-      { name: "Sonarr", description: "TV shows", href: "#", icon: Tv, online: true },
-      { name: "Radarr", description: "Movies", href: "#", icon: Film, online: true },
-      { name: "Bazarr", description: "Subtitles", href: "#", icon: Captions, online: false },
-      { name: "Prowlarr", description: "Indexers", href: "#", icon: Search, online: true },
+      { name: "Sonarr", description: "TV shows", href: `http://${TS_IP}:8989`, icon: Tv },
+      { name: "Radarr", description: "Movies", href: `http://${TS_IP}:7878`, icon: Film },
+      { name: "Bazarr", description: "Subtitles", href: `http://${TS_IP}:6767`, icon: Captions },
+      { name: "Prowlarr", description: "Indexers", href: `http://${TS_IP}:9696`, icon: Search },
     ],
   },
   {
     title: "Downloads",
     apps: [
-      { name: "qBittorrent", description: "Torrent client", href: "#", icon: Download, online: true },
-      { name: "SABnzbd", description: "Usenet client", href: "#", icon: CloudDownload, online: true },
-      { name: "Jellyseerr", description: "Media requests", href: "#", icon: Ticket, online: false },
+      { name: "qBittorrent", description: "Torrent client", href: `http://${TS_IP}:8080`, icon: Download },
+      { name: "SABnzbd", description: "Usenet client", href: `http://${TS_IP}:8081`, icon: CloudDownload },
+      { name: "Jellyseerr", description: "Media requests", href: `http://${TS_IP}:5055`, icon: Ticket },
     ],
   },
 ]
@@ -60,13 +64,10 @@ function AppTile({ app }: { app: App }) {
   return (
     <a
       href={app.href}
+      target="_blank"
+      rel="noopener noreferrer"
       className="group relative flex flex-col gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <span
-        className={`absolute right-4 top-4 size-2 rounded-full ${app.online ? "bg-status-online" : "bg-status-offline"}`}
-        aria-hidden="true"
-      />
-      <span className="sr-only">{app.online ? "Online" : "Offline"}</span>
       <span className="flex size-12 items-center justify-center rounded-lg bg-secondary text-foreground transition-colors group-hover:bg-brand group-hover:text-brand-foreground">
         <Icon className="size-6" aria-hidden="true" />
       </span>
