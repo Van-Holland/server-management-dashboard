@@ -10,20 +10,13 @@ export const metadata: Metadata = {
   title: 'Homelab — Server Dashboard',
   description: 'Monitor storage usage and launch your self-hosted apps',
   generator: 'v0.app',
+  // The mulderserver mark. Orange on transparent reads on both light and dark
+  // tab bars, so unlike the v0 icons it replaced there's no light/dark split —
+  // one file, two sizes, the larger one for retina tabs.
   icons: {
     icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
+      { url: '/icon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-64x64.png', sizes: '64x64', type: 'image/png' },
     ],
     apple: '/apple-icon.png',
   },
