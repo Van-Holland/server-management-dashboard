@@ -1,29 +1,7 @@
 import { HardDrive, Database, Cpu } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-
-function usageColor(pct: number) {
-  if (pct < 60) return "bg-usage-low"
-  if (pct <= 85) return "bg-usage-mid"
-  return "bg-usage-high"
-}
-
-function UsageBar({ pct, label }: { pct: number; label: string }) {
-  return (
-    <div
-      className="h-2.5 w-full overflow-hidden rounded-full bg-secondary"
-      role="progressbar"
-      aria-valuenow={pct}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={label}
-    >
-      <div
-        className={`h-full rounded-full transition-all ${usageColor(pct)}`}
-        style={{ width: `${pct}%` }}
-      />
-    </div>
-  )
-}
+import { LiveCards } from "@/components/live-cards"
+import { ProgressBar, usageColor } from "@/components/progress-bar"
 
 function formatSize(gb: number) {
   if (gb >= 1000) return `${(gb / 1000).toFixed(2)} TB`
@@ -43,7 +21,7 @@ function DiskCard({
 }) {
   const pct = Math.min(100, Math.round((usedGb / totalGb) * 100))
   return (
-    <div className="rounded-xl border border-border bg-card p-5 sm:p-6">
+    <div className="h-full rounded-xl border border-border bg-card p-5 sm:p-6 lg:col-span-2">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
@@ -62,7 +40,7 @@ function DiskCard({
         </p>
       </div>
       <div className="mt-5">
-        <UsageBar pct={pct} label={`${label} usage`} />
+        <ProgressBar pct={pct} label={`${label} usage`} color={usageColor(pct)} />
       </div>
     </div>
   )
@@ -75,14 +53,14 @@ function MetricRow({ label, pct }: { label: string; pct: number }) {
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <span className="font-mono text-xs font-semibold tabular-nums text-foreground">{pct}%</span>
       </div>
-      <UsageBar pct={pct} label={`${label} usage`} />
+      <ProgressBar pct={pct} label={`${label} usage`} color={usageColor(pct)} />
     </div>
   )
 }
 
 function SystemCard({ cpu, ram }: { cpu: number; ram: number }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 sm:p-6">
+    <div className="h-full rounded-xl border border-border bg-card p-5 sm:col-span-2 sm:p-6 lg:col-span-2">
       <div className="flex items-center gap-3">
         <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
           <Cpu className="size-5" aria-hidden="true" />
@@ -112,10 +90,19 @@ export function StatsCards({
   ram: number
 }) {
   return (
-    <section aria-label="System stats" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    // Six columns so five cards divide cleanly at desktop width: the three
+    // fixed-size stat cards take two columns each (a row of three), and the two
+    // wider live cards take three each (a row of two). At tablet width the
+    // grid drops to two columns and the wide cards go full-bleed, so no card is
+    // ever left stranded beside a gap.
+    <section
+      aria-label="System stats"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6"
+    >
       <DiskCard label="SSD" usedGb={ssd.usedGb} totalGb={ssd.totalGb} icon={HardDrive} />
       <DiskCard label="HDD" usedGb={hdd.usedGb} totalGb={hdd.totalGb} icon={Database} />
       <SystemCard cpu={cpu} ram={ram} />
+      <LiveCards />
     </section>
   )
 }

@@ -2,10 +2,21 @@ services:
   server-dashboard:
     build: .
     container_name: server-dashboard
-    restart: unless-stopped
+    # `always`, not `unless-stopped` — see the Linux Home Server project's hard
+    # rules: a dockerd crash leaves containers looking hand-stopped, and
+    # `unless-stopped` then refuses to bring them back.
+    restart: always
     ports:
       - "3005:3000"
+    # Credentials for the download clients. Lives only on the server, gitignored.
+    env_file:
+      - .env
     volumes:
       - /:/host/root:ro
       - /mnt/storage8tb:/host/storage8tb:ro
       - /proc:/host/proc:ro
+      # Keeps the last speedtest result across restarts and rebuilds.
+      - speedtest-cache:/cache
+
+volumes:
+  speedtest-cache:
