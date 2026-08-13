@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Server } from "lucide-react"
 
 export function HeaderBar({ uptime }: { uptime: string }) {
   const [now, setNow] = useState<Date | null>(null)
@@ -22,9 +21,16 @@ export function HeaderBar({ uptime }: { uptime: string }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Server className="size-5" aria-hidden="true" />
-        </span>
+        {/* The mark carries its own shape and transparent background, so it sits
+            bare rather than inside the filled chip the generic glyph needed. */}
+        <img
+          src="/logo.png"
+          alt=""
+          aria-hidden="true"
+          width={40}
+          height={40}
+          className="size-10 shrink-0"
+        />
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-foreground">mulderserver</h1>
           <div className="mt-0.5 flex items-center gap-2">

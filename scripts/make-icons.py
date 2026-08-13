@@ -29,7 +29,14 @@ FULLY_OPAQUE_AT = 60
 # Below this, treat as background outright — kills JPEG-ish noise in the greys.
 NOISE_FLOOR = 6
 
-SIZES = {"icon-32x32.png": 32, "icon-64x64.png": 64, "apple-icon.png": 180}
+SIZES = {
+    "icon-32x32.png": 32,
+    "icon-64x64.png": 64,
+    "apple-icon.png": 180,
+    # Shown in the page header at 40px; generated large enough to stay sharp on
+    # high-DPI screens.
+    "logo.png": 256,
+}
 
 
 def cut_background(image: Image.Image) -> Image.Image:
