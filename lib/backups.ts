@@ -34,6 +34,13 @@ export type BackupLeg = {
   detail: string | null
   /** Why the verdict is what it is — always populated for anything but "ok". */
   note: string | null
+  /**
+   * How the note should read, independent of the verdict. A run can finish on
+   * time (verdict "ok") and still have logged real errors — and rendering that
+   * warning in the verdict's green was exactly the "a problem that looks fine"
+   * failure this page exists to prevent.
+   */
+  noteTone: "neutral" | "warn"
 }
 
 export type BackupsSnapshot = {
@@ -125,29 +132,67 @@ function rcloneSummary(log: string): string | null {
   return parts.join(", ")
 }
 
-/** Counts real rclone ERROR lines only. A bare /error/i match also hits
- *  filenames and INFO text, which is how a healthy run can look broken. */
-function rcloneErrors(log: string): number {
-  return [...log.matchAll(/^\d{4}\/\d{2}\/\d{2} [\d:]+ ERROR\s*:/gm)].length
+/**
+ * Counts rclone ERROR lines belonging to the LAST run only.
+ *
+ * Two things this has to get right, both learned the hard way:
+ *
+ * 1. A bare /error/i match also hits filenames and INFO text, so the line must
+ *    be anchored to rclone's own `<timestamp> ERROR :` shape.
+ * 2. The 64KB tail spans several nights. Counting the whole tail reports last
+ *    week's errors as though they happened tonight, so only lines within the
+ *    run window (2h back from the last activity — runs take ~15 min and are
+ *    nightly, so this captures exactly one) are counted.
+ *
+ * The recovered token-refresh 401 is excluded deliberately. Proton's access
+ * token expires between nightly runs, so rclone's first request 401s, refreshes
+ * and carries on — observed at 03:00:04 on consecutive nights, with both runs
+ * completing normally. Surfacing that every single day would be noise, and a
+ * page that cries wolf nightly is one you stop reading. Anything that is NOT
+ * this pattern still shows.
+ */
+const RECOVERED_TOKEN_401 = /proton drive root link ID.*40[13].*(Invalid access token|Unauthorized)/i
+
+function rcloneErrors(log: string, lastRunMs: number | null): number {
+  const windowStart = lastRunMs === null ? 0 : lastRunMs - 2 * 3_600_000
+  let count = 0
+
+  for (const line of log.split("\n")) {
+    if (!/^\d{4}\/\d{2}\/\d{2} [\d:]+ ERROR\s*:/.test(line)) continue
+    if (RECOVERED_TOKEN_401.test(line)) continue
+
+    const m = RCLONE_TS.exec(line)
+    if (!m) continue
+    const [, y, mo, d, h, mi, s] = m
+    const ts = new Date(+y, +mo - 1, +d, +h, +mi, +s).getTime()
+    if (ts >= windowStart) count++
+  }
+
+  return count
 }
 
 async function protonToHdd(): Promise<BackupLeg> {
   const log = await readTail(RCLONE_LOG)
   const lastRunMs = log ? lastRcloneTimestamp(log) : null
   const age = hoursSince(lastRunMs)
-  const errors = log ? rcloneErrors(log) : 0
+  const errors = log ? rcloneErrors(log, lastRunMs) : 0
 
   let verdict = judge(age, 27, 36)
   let note: string | null = null
+  let noteTone: "neutral" | "warn" = "neutral"
   if (!log) {
     verdict = "unknown"
     note = "Log file unreadable — the job's status cannot be established either way."
+    noteTone = "warn"
   } else if (verdict === "overdue") {
     note = "Has not run since well past its scheduled window. Check cron and the Proton token."
+    noteTone = "warn"
   } else if (verdict === "late") {
     note = "Later than its 03:00 slot but not yet alarming."
+    noteTone = "warn"
   } else if (errors > 0) {
-    note = `Ran, but the log tail contains ${errors} ERROR line${errors === 1 ? "" : "s"}.`
+    note = `Ran and finished, but logged ${errors} error${errors === 1 ? "" : "s"} on this run.`
+    noteTone = "warn"
   }
 
   return {
@@ -162,6 +207,7 @@ async function protonToHdd(): Promise<BackupLeg> {
     verdict,
     detail: log ? rcloneSummary(log) : null,
     note,
+    noteTone,
   }
 }
 
@@ -179,6 +225,7 @@ async function vanHollandToProton(): Promise<BackupLeg> {
 
   let verdict = judge(age, 27, 36)
   let note: string | null = null
+  const noteTone = "warn" as const
 
   if (!log) {
     verdict = "unknown"
@@ -207,6 +254,7 @@ async function vanHollandToProton(): Promise<BackupLeg> {
     verdict,
     detail: null,
     note,
+    noteTone,
   }
 }
 
@@ -225,6 +273,7 @@ async function vanHollandToProton(): Promise<BackupLeg> {
 async function timeMachine(): Promise<BackupLeg> {
   let lastRunMs: number | null = null
   let note: string | null = null
+  const noteTone = "warn" as const
 
   try {
     const names = await readdir(TIMEMACHINE)
@@ -262,6 +311,7 @@ async function timeMachine(): Promise<BackupLeg> {
     verdict,
     detail: null,
     note,
+    noteTone,
   }
 }
 
@@ -289,7 +339,7 @@ type VaultStatus = {
  */
 async function readVaultStatus(): Promise<VaultStatus | null> {
   try {
-    return JSON.parse(await readFile(`${STATUS_DIR}/vault.json`, "utf-8")) as VaultStatus
+    return JSON.parse(await readFile(`${STATUS_DIR}/backup-status.json`, "utf-8")) as VaultStatus
   } catch {
     return null
   }
@@ -327,6 +377,7 @@ function vaultToGithub(status: VaultStatus | null): BackupLeg {
     verdict,
     detail: status?.lastCommit ?? null,
     note,
+    noteTone: "warn",
   }
 }
 
@@ -368,6 +419,7 @@ function portfolioMirror(status: VaultStatus | null): BackupLeg {
     verdict,
     detail: status?.mirrorStatus ?? null,
     note,
+    noteTone: "warn",
   }
 }
 

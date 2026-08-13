@@ -129,7 +129,16 @@ export function LegRow({ leg }: { leg: BackupLeg }) {
       <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">{leg.destination}</p>
 
       {leg.note && (
-        <p className={`mt-3 border-t border-border pt-3 text-xs ${style.text}`}>{leg.note}</p>
+        // Coloured by noteTone, NOT by the verdict. A job can be "ok" on timing
+        // and still have logged errors, and painting that warning green is the
+        // precise failure this page exists to catch.
+        <p
+          className={`mt-3 border-t border-border pt-3 text-xs ${
+            leg.noteTone === "warn" ? "text-usage-mid" : "text-muted-foreground"
+          }`}
+        >
+          {leg.note}
+        </p>
       )}
     </div>
   )
