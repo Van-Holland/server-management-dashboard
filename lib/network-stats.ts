@@ -11,9 +11,8 @@ export type NetworkRates = {
 // /proc/net is per-network-namespace, so reading /host/proc/net/dev from inside
 // a container returns the CONTAINER's interfaces (just lo and eth0) even though
 // the host's /proc is mounted. PID 1 is the host's init, and /proc/1/net resolves
-// in its namespace — which is the host's. /proc/stat and /proc/meminfo need no
-// such treatment because they're global, which is why CPU and RAM read correctly
-// from the plain path.
+// in its namespace — which is the host's. /proc/stat, /proc/meminfo and
+// /proc/diskstats need no such treatment because they're global.
 const NET_DEV_PATH = "/host/proc/1/net/dev"
 
 // Interfaces that don't represent traffic entering or leaving the machine:
@@ -27,11 +26,9 @@ const VIRTUAL_IFACE = /^(lo|docker\d*|br-.+|veth.+|tailscale\d*|virbr\d*)$/
 const RX_BYTES = 0
 const TX_BYTES = 8
 
-const SAMPLE_MS = 500
+export type NetSample = { rx: number; tx: number; names: string[] }
 
-type Sample = { rx: number; tx: number; names: string[] }
-
-async function sampleNetDev(): Promise<Sample> {
+export async function sampleNetDev(): Promise<NetSample> {
   const raw = await readFile(NET_DEV_PATH, "utf-8")
   let rx = 0
   let tx = 0
@@ -56,15 +53,11 @@ async function sampleNetDev(): Promise<Sample> {
   return { rx, tx, names }
 }
 
-// Rates are deltas, so this samples twice rather than keeping state between
-// requests — same approach as getCpuStats(). Self-contained: no first-call zero,
-// and concurrent viewers can't corrupt each other's readings.
-export async function getNetworkRates(): Promise<NetworkRates> {
-  const first = await sampleNetDev()
-  await new Promise((resolve) => setTimeout(resolve, SAMPLE_MS))
-  const second = await sampleNetDev()
-
-  const elapsedSeconds = SAMPLE_MS / 1000
+export function networkRates(
+  first: NetSample,
+  second: NetSample,
+  elapsedSeconds: number,
+): NetworkRates {
   return {
     // Counters reset to zero when an interface goes down; clamp so a reset
     // reads as idle rather than as a huge negative spike.
