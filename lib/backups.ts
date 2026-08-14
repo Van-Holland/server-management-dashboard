@@ -47,10 +47,16 @@ export type BackupsSnapshot = {
   legs: BackupLeg[]
   worst: BackupVerdict
   checkedMs: number
-  /** Set when a restore has never been verified. Deliberately not a leg — it is
-   *  a property of the whole system, not of any single job. */
-  restoreTested: boolean
+  /** When a restore was last actually performed and verified, or null if never.
+   *  Deliberately not a leg — it is a property of the whole system, not of any
+   *  single job. A date rather than a boolean so the badge can re-arm itself:
+   *  a restore proven once in 2026 says nothing about 2028. */
+  restoreTestedMs: number | null
 }
+
+/** How long a proven restore stays convincing. Past this the badge comes back
+ *  on its own — nobody will remember to re-raise it by hand. */
+export const RESTORE_TEST_MAX_AGE_MS = 183 * 24 * 60 * 60 * 1000
 
 const HOST = "/host/root"
 const RCLONE_LOG = `${HOST}/home/matt/rclone-backup.log`
@@ -459,9 +465,13 @@ export async function getBackups(): Promise<BackupsSnapshot> {
     legs,
     worst,
     checkedMs: Date.now(),
-    // Hardcoded false until a restore is actually performed and this is flipped
-    // by hand. It is not measurable from here, and defaulting it to true would
-    // be the dashboard telling a comfortable lie.
-    restoreTested: false,
+    // Hardcoded by hand — not measurable from here, and defaulting it to "recently"
+    // would be the dashboard telling a comfortable lie. Set on 2026-08-14, when a
+    // restore was performed end-to-end for the first time: restore-test.txt was
+    // deleted from the Mac and from Proton, recovered from the HDD, then corrupted
+    // and recovered again out of Backup Proton Versions/2026-08-14/. Both paths
+    // verified by md5 (f70754fd355e496711a9772969b08ee0), not by eye.
+    // Update this date the next time a restore is actually proven, not before.
+    restoreTestedMs: Date.parse("2026-08-14T05:42:00Z"),
   }
 }

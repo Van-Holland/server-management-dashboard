@@ -1,6 +1,7 @@
 import { ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { BackupLeg, BackupVerdict, BackupsSnapshot } from "@/lib/backups"
+import { RESTORE_TEST_MAX_AGE_MS } from "@/lib/backups"
 
 /**
  * Presentation for backup verdicts. Reuses the same usage-low/mid/high tokens
@@ -35,6 +36,23 @@ export function formatAge(hours: number | null): string {
   if (hours < 24) return `${Math.floor(hours)}h ago`
   const days = Math.floor(hours / 24)
   return `${days} day${days === 1 ? "" : "s"} ago`
+}
+
+/**
+ * The badge text for the restore gap, or null when a restore is recent enough
+ * to still mean something. Returns a string rather than a boolean so the stale
+ * case can say how stale — "never tested" and "tested 8 months ago" are
+ * different problems and deserve different words.
+ *
+ * Silence here is earned and expires. Lesson 07: the absence of a restore test
+ * has to raise the alarm by itself, because nothing else is going to.
+ */
+export function restoreWarning(testedMs: number | null, now: number = Date.now()): string | null {
+  if (testedMs === null) return "Restore never tested"
+  const ageMs = now - testedMs
+  if (ageMs <= RESTORE_TEST_MAX_AGE_MS) return null
+  const months = Math.floor(ageMs / (30 * 24 * 60 * 60 * 1000))
+  return `Restore test ${months} months old`
 }
 
 /**
@@ -76,11 +94,11 @@ export function BackupCard({ snapshot }: { snapshot: BackupsSnapshot }) {
         </p>
       </div>
 
-      {!snapshot.restoreTested && (
+      {restoreWarning(snapshot.restoreTestedMs) && (
         // Shown even when every leg is green, because this is the gap that
         // turns any of the others from an inconvenience into a real loss.
         <span className="shrink-0 rounded-lg bg-secondary px-2.5 py-1.5 text-xs font-medium text-usage-mid">
-          Restore never tested
+          {restoreWarning(snapshot.restoreTestedMs)}
         </span>
       )}
 
