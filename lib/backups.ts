@@ -61,8 +61,15 @@ export const RESTORE_TEST_MAX_AGE_MS = 183 * 24 * 60 * 60 * 1000
 const HOST = "/host/root"
 const RCLONE_LOG = `${HOST}/home/matt/rclone-backup.log`
 const VHPM_LOG = `${HOST}/home/matt/vhpm-dashboard-backup.log`
+const IMMICH_LOG = `${HOST}/home/matt/immich-backup.log`
 const TIMEMACHINE = "/host/storage8tb/backups/timemachine"
 const STATUS_DIR = `${HOST}/home/matt/backup-status`
+/** Run boundaries live in a fixed-size state file, NOT in the log. readTail
+ *  only reads the last 64KB, and a long run buries its own "=== start ===" line
+ *  under thousands of rclone lines — which broke "started but never finished"
+ *  detection during exactly the runs most likely to have died. Found on
+ *  2026-08-20 by looking at the rendered page, after the build passed clean. */
+const IMMICH_STATE = `${STATUS_DIR}/immich-backup.json`
 
 /** Both logs are append-only and never rotated — the rclone one is already
  *  ~400 KB and grows every night. Only the tail is ever needed, so never pull
@@ -264,6 +271,130 @@ async function vanHollandToProton(): Promise<BackupLeg> {
   }
 }
 
+/**
+ * Leg 6: the Immich photo library going off-site to Proton Drive.
+ *
+ * This log is written by BOTH immich-backup.sh (its own `YYYY-MM-DD hh:mm:ss
+ * [immich-backup]` lines) and by the rclone it invokes (rclone's `YYYY/MM/DD`
+ * lines), so the two timestamp shapes are deliberately different and only the
+ * script's own markers are trusted for run boundaries.
+ *
+ * The script reports two conditions separately, and they are NOT merged here:
+ *
+ *   copy=ok|fail    did this job's own upload succeed
+ *   dump=ok|stale|missing
+ *                   is Immich still writing its nightly database dump
+ *
+ * The second is not a failure of this job — the upload can be flawless while
+ * Immich quietly stopped dumping days ago. But a perfect copy of a stale dump
+ * is not a healthy backup either, so it is surfaced as a warn-toned note rather
+ * than swallowed into a green verdict. Same rule as the error-count case above:
+ * colour the claim, not the verdict.
+ *
+ * Why there is no separate pg_dump leg: there used to be one, built and tested
+ * on 2026-08-20 and removed the same day. Immich v3 already dumps its own
+ * database nightly into photos/library/backups/, version-stamped, and that
+ * folder sits inside the tree this job uploads — so the database goes off-site
+ * for free. The vault had believed since 2026-08-13 that nothing backed the
+ * database up; that was never true and nobody had re-checked it.
+ */
+type ImmichState = {
+  startedIso?: string
+  finishedIso?: string | null
+  copy?: string
+  dump?: string
+}
+
+/** How long a run may be in progress before "still running" stops being a
+ *  believable explanation for a missing finish. The first run uploaded 21 GB
+ *  and took about six hours; nightly runs after that touch only what changed
+ *  and finish in minutes. */
+const IMMICH_MAX_RUN_HOURS = 9
+
+async function readImmichState(): Promise<ImmichState | null> {
+  try {
+    return JSON.parse(await readFile(IMMICH_STATE, "utf-8")) as ImmichState
+  } catch {
+    return null
+  }
+}
+
+async function immichToProton(): Promise<BackupLeg> {
+  const state = await readImmichState()
+  // The log is still read, but only for the human-readable transfer summary.
+  // Run boundaries come from the state file — see the comment on IMMICH_STATE.
+  const log = await readTail(IMMICH_LOG)
+
+  const finishedMs = state?.finishedIso ? Date.parse(state.finishedIso) : null
+  const startedMs = state?.startedIso ? Date.parse(state.startedIso) : null
+  const lastRunMs = Number.isFinite(finishedMs) ? finishedMs : null
+  const age = hoursSince(lastRunMs)
+
+  let verdict = judge(age, 27, 36)
+  let note: string | null = null
+  let noteTone: "neutral" | "warn" = "neutral"
+
+  const running = startedMs !== null && (lastRunMs === null || startedMs > lastRunMs)
+  const runHours = running ? hoursSince(startedMs) : null
+
+  if (!state) {
+    verdict = "unknown"
+    note = "No state file — the job has never run, or cannot write to /home/matt/backup-status."
+    noteTone = "warn"
+  } else if (running && runHours !== null && runHours < IMMICH_MAX_RUN_HOURS) {
+    // Deliberately NOT green and NOT red. A run in progress has not proven
+    // anything yet, and claiming either would be a guess.
+    verdict = "unknown"
+    note = `A run started ${formatRunAge(runHours)} ago and has not finished yet. Still plausible — large runs take hours.`
+    noteTone = "neutral"
+  } else if (running) {
+    verdict = "failed"
+    note = `Started ${formatRunAge(runHours ?? 0)} ago and never finished. The last run died partway.`
+    noteTone = "warn"
+  } else if (state.copy === "fail") {
+    verdict = "failed"
+    note = "The upload to Proton Drive did not complete. Check the Proton token and the log."
+    noteTone = "warn"
+  } else if (verdict === "overdue") {
+    note = "Has not run since well past its scheduled window."
+    noteTone = "warn"
+  } else if (verdict === "late") {
+    note = "Later than its 03:30 slot but not yet alarming."
+    noteTone = "warn"
+  } else if (state.dump === "missing") {
+    note =
+      "Photos copied fine, but Immich has written no database dump at all. " +
+      "Albums, faces and favourites are not being protected."
+    noteTone = "warn"
+  } else if (state.dump === "stale") {
+    note =
+      "Photos copied fine, but Immich's newest database dump is over 48h old — " +
+      "its own nightly backup has stopped. The photos are safe; the albums are ageing."
+    noteTone = "warn"
+  }
+
+  return {
+    id: "immich-to-proton",
+    name: "Immich photo library → Proton Drive",
+    protects:
+      "All Immich photos (9 GB from phones, 12 GB imported by hand) and Immich's own nightly database dumps",
+    destination: "protondrive:3. Backup/Pictures",
+    offsite: true,
+    schedule: "Nightly, 03:30",
+    lastRunMs,
+    ageHours: age,
+    verdict,
+    detail: log ? rcloneSummary(log) : null,
+    note,
+    noteTone,
+  }
+}
+
+function formatRunAge(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)} min`
+  return `${hours.toFixed(1)}h`
+}
+
 // ---------------------------------------------------------------------------
 // Leg 3: Time Machine, judged by the sparsebundle's own mtime.
 // ---------------------------------------------------------------------------
@@ -447,6 +578,7 @@ export async function getBackups(): Promise<BackupsSnapshot> {
   const settled = await Promise.allSettled([
     protonToHdd(),
     vanHollandToProton(),
+    immichToProton(),
     timeMachine(),
   ])
 
