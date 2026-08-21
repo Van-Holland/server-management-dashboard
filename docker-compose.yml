@@ -6,6 +6,11 @@ services:
     # rules: a dockerd crash leaves containers looking hand-stopped, and
     # `unless-stopped` then refuses to bring them back.
     restart: always
+    # Without this the page renders every timestamp in UTC — two hours behind
+    # Dutch time in summer. Setting TZ alone is NOT enough; see the zoneinfo
+    # mount below. Added 2026-08-21.
+    environment:
+      - TZ=Europe/Amsterdam
     ports:
       - "3005:3000"
     # Credentials for the download clients. Lives only on the server, gitignored.
@@ -15,6 +20,13 @@ services:
       - /:/host/root:ro
       - /mnt/storage8tb:/host/storage8tb:ro
       - /proc:/host/proc:ro
+      # This image is Alpine-based and ships no tzdata, so TZ=Europe/Amsterdam
+      # above resolves to nothing and the container silently falls back to UTC —
+      # no error, no warning. Lending it the host's timezone database is the
+      # no-rebuild fix. The proper fix is `RUN apk add --no-cache tzdata` in the
+      # Dockerfile; do that next time this image is rebuilt anyway, then this
+      # mount can go. Added 2026-08-21.
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
       # Keeps the last speedtest result across restarts and rebuilds.
       - speedtest-cache:/cache
 
