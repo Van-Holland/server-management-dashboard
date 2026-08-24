@@ -78,6 +78,14 @@ function GroupSummary({ group, thin }: { group: MediaGroup; thin: number }) {
   const Icon = group.kind === "series" ? Tv : Film
   const wantsUpgrade = group.files.filter((f) => f.wantsUpgrade).length
 
+  /*
+   * A one-file group (a film) is collapsible like everything else, but folding
+   * it away must not hide the two numbers this page exists to show. So for a
+   * single file the summary carries its quality and bitrate outright — collapsed
+   * costs you the runtime and score columns, nothing that matters at a glance.
+   */
+  const only = group.files.length === 1 ? group.files[0] : null
+
   return (
     <>
       <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
@@ -86,13 +94,27 @@ function GroupSummary({ group, thin }: { group: MediaGroup; thin: number }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{group.title}</p>
         <p className="text-xs text-muted-foreground">
-          {group.files.length} file{group.files.length === 1 ? "" : "s"}
-          {group.totalBytes > 0 && <> · {formatBytes(group.totalBytes)}</>}
-          {wantsUpgrade > 0 && <> · {wantsUpgrade} still hunting</>}
+          {only ? (
+            <>
+              {only.quality} · {formatBytes(only.sizeBytes)} ·{" "}
+              <span className={only.thin ? "font-semibold text-usage-high" : "text-foreground"}>
+                {formatMbps(only.bitrateBps)}
+              </span>
+              {only.wantsUpgrade && <> · still hunting</>}
+            </>
+          ) : (
+            <>
+              {group.files.length} file{group.files.length === 1 ? "" : "s"}
+              {group.totalBytes > 0 && <> · {formatBytes(group.totalBytes)}</>}
+              {wantsUpgrade > 0 && <> · {wantsUpgrade} still hunting</>}
+              {thin > 0 && <span className="text-usage-high"> · {thin} thin</span>}
+            </>
+          )}
+          {/* Always separated — both branches above always render something,
+              so an unconditional separator cannot produce a leading "· ". */}
           {group.missingCount > 0 && (
             <span className="text-usage-high"> · {group.missingCount} missing</span>
           )}
-          {thin > 0 && <span className="text-usage-high"> · {thin} thin</span>}
         </p>
       </div>
     </>
@@ -125,12 +147,11 @@ function FileTable({ files }: { files: MediaFile[] }) {
 }
 
 /**
- * Series collapse; films do not.
+ * Every group with files collapses — series and films alike.
  *
- * A series can be 20 rows and there are only ever a handful of series, so
- * hiding the rows behind a click is a real saving. A film is exactly one row —
- * collapsing it would hide a single line behind a click, which costs more than
- * it saves.
+ * A group with NO files (a monitored show or film nothing has downloaded yet)
+ * renders as a plain block instead: making it a <details> would give it a
+ * disclosure control that opens onto nothing, which reads as broken.
  *
  * Built on <details>/<summary> rather than React state on purpose: it needs no
  * client JavaScript, so this page stays a server component, and the browser
@@ -139,24 +160,19 @@ function FileTable({ files }: { files: MediaFile[] }) {
 function GroupBlock({ group }: { group: MediaGroup }) {
   const thin = group.files.filter((f) => f.thin).length
 
-  if (group.kind !== "series") {
+  if (group.files.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-4">
           <GroupSummary group={group} thin={thin} />
         </div>
-        {group.files.length > 0 && <FileTable files={group.files} />}
       </div>
     )
   }
 
   return (
     <details className="group rounded-xl border border-border bg-card">
-      <summary
-        className={`flex cursor-pointer list-none items-center gap-x-4 gap-y-1 px-5 py-4 [&::-webkit-details-marker]:hidden ${
-          group.files.length > 0 ? "hover:bg-secondary/30" : "cursor-default"
-        } rounded-xl transition-colors`}
-      >
+      <summary className="flex cursor-pointer list-none items-center gap-x-4 gap-y-1 rounded-xl px-5 py-4 transition-colors hover:bg-secondary/30 [&::-webkit-details-marker]:hidden">
         <GroupSummary group={group} thin={thin} />
         {/*
           Two icons swapped by display, rather than one icon rotated.
@@ -167,20 +183,16 @@ function GroupBlock({ group }: { group: MediaGroup }) {
           disclosure arrow on. `hidden`/`block` under the same `group-open:`
           variant work, and the variant itself was confirmed matching.
         */}
-        {group.files.length > 0 && (
-          <>
-            <ChevronRight
-              className="size-4 shrink-0 text-muted-foreground group-open:hidden"
-              aria-hidden="true"
-            />
-            <ChevronDown
-              className="hidden size-4 shrink-0 text-muted-foreground group-open:block"
-              aria-hidden="true"
-            />
-          </>
-        )}
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground group-open:hidden"
+          aria-hidden="true"
+        />
+        <ChevronDown
+          className="hidden size-4 shrink-0 text-muted-foreground group-open:block"
+          aria-hidden="true"
+        />
       </summary>
-      {group.files.length > 0 && <FileTable files={group.files} />}
+      <FileTable files={group.files} />
     </details>
   )
 }
