@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowLeft, Clock, Film, Gauge, Tv } from "lucide-react"
+import { ArrowLeft, ChevronDown, ChevronRight, Clock, Film, Gauge, Tv } from "lucide-react"
 import {
   formatBytes,
   formatMbps,
@@ -71,54 +71,117 @@ function FileRow({ file }: { file: MediaFile }) {
   )
 }
 
-function GroupBlock({ group }: { group: MediaGroup }) {
+/** The line that has to stand alone while a group is collapsed. Everything worth
+ *  reacting to — missing episodes, thin files — is repeated here, because a
+ *  warning you have to click to discover is a warning nobody sees. */
+function GroupSummary({ group, thin }: { group: MediaGroup; thin: number }) {
   const Icon = group.kind === "series" ? Tv : Film
-  const thin = group.files.filter((f) => f.thin).length
+  const wantsUpgrade = group.files.filter((f) => f.wantsUpgrade).length
 
   return (
-    <div className="rounded-xl border border-border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-            <Icon className="size-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">{group.title}</p>
-            <p className="text-xs text-muted-foreground">
-              {group.files.length} file{group.files.length === 1 ? "" : "s"}
-              {group.totalBytes > 0 && <> · {formatBytes(group.totalBytes)}</>}
-              {group.missingCount > 0 && (
-                <span className="text-usage-high"> · {group.missingCount} missing</span>
-              )}
-              {thin > 0 && <span className="text-usage-high"> · {thin} thin</span>}
-            </p>
-          </div>
-        </div>
+    <>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{group.title}</p>
+        <p className="text-xs text-muted-foreground">
+          {group.files.length} file{group.files.length === 1 ? "" : "s"}
+          {group.totalBytes > 0 && <> · {formatBytes(group.totalBytes)}</>}
+          {wantsUpgrade > 0 && <> · {wantsUpgrade} still hunting</>}
+          {group.missingCount > 0 && (
+            <span className="text-usage-high"> · {group.missingCount} missing</span>
+          )}
+          {thin > 0 && <span className="text-usage-high"> · {thin} thin</span>}
+        </p>
       </div>
+    </>
+  )
+}
 
-      {group.files.length > 0 && (
-        <div className="overflow-x-auto px-5 pb-4">
-          <table className="w-full min-w-[38rem] text-left">
-            <thead>
-              <tr className="text-[0.7rem] uppercase tracking-wide text-muted-foreground">
-                <th className="pb-1 pr-3 font-medium">Item</th>
-                <th className="pb-1 pr-3 font-medium">Quality</th>
-                <th className="pb-1 pr-3 text-right font-medium">Size</th>
-                <th className="pb-1 pr-3 text-right font-medium">Bitrate</th>
-                <th className="pb-1 pr-3 text-right font-medium">Runtime</th>
-                <th className="pb-1 pr-3 text-right font-medium">Score</th>
-                <th className="pb-1 text-right font-medium">Rechecked</th>
-              </tr>
-            </thead>
-            <tbody>
-              {group.files.map((f) => (
-                <FileRow key={f.key} file={f} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+function FileTable({ files }: { files: MediaFile[] }) {
+  return (
+    <div className="overflow-x-auto px-5 pb-4">
+      <table className="w-full min-w-[38rem] text-left">
+        <thead>
+          <tr className="text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+            <th className="pb-1 pr-3 font-medium">Item</th>
+            <th className="pb-1 pr-3 font-medium">Quality</th>
+            <th className="pb-1 pr-3 text-right font-medium">Size</th>
+            <th className="pb-1 pr-3 text-right font-medium">Bitrate</th>
+            <th className="pb-1 pr-3 text-right font-medium">Runtime</th>
+            <th className="pb-1 pr-3 text-right font-medium">Score</th>
+            <th className="pb-1 text-right font-medium">Rechecked</th>
+          </tr>
+        </thead>
+        <tbody>
+          {files.map((f) => (
+            <FileRow key={f.key} file={f} />
+          ))}
+        </tbody>
+      </table>
     </div>
+  )
+}
+
+/**
+ * Series collapse; films do not.
+ *
+ * A series can be 20 rows and there are only ever a handful of series, so
+ * hiding the rows behind a click is a real saving. A film is exactly one row —
+ * collapsing it would hide a single line behind a click, which costs more than
+ * it saves.
+ *
+ * Built on <details>/<summary> rather than React state on purpose: it needs no
+ * client JavaScript, so this page stays a server component, and the browser
+ * gives keyboard support and correct toggle-on-second-click for free.
+ */
+function GroupBlock({ group }: { group: MediaGroup }) {
+  const thin = group.files.filter((f) => f.thin).length
+
+  if (group.kind !== "series") {
+    return (
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-4">
+          <GroupSummary group={group} thin={thin} />
+        </div>
+        {group.files.length > 0 && <FileTable files={group.files} />}
+      </div>
+    )
+  }
+
+  return (
+    <details className="group rounded-xl border border-border bg-card">
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-x-4 gap-y-1 px-5 py-4 [&::-webkit-details-marker]:hidden ${
+          group.files.length > 0 ? "hover:bg-secondary/30" : "cursor-default"
+        } rounded-xl transition-colors`}
+      >
+        <GroupSummary group={group} thin={thin} />
+        {/*
+          Two icons swapped by display, rather than one icon rotated.
+          `rotate-90` does not take in this project — verified in the browser:
+          even the plain utility computes to `rotate: 0deg` on an element the
+          rule demonstrably matches, so something else in the CSS is winning.
+          That is worth chasing separately; it is not worth blocking a
+          disclosure arrow on. `hidden`/`block` under the same `group-open:`
+          variant work, and the variant itself was confirmed matching.
+        */}
+        {group.files.length > 0 && (
+          <>
+            <ChevronRight
+              className="size-4 shrink-0 text-muted-foreground group-open:hidden"
+              aria-hidden="true"
+            />
+            <ChevronDown
+              className="hidden size-4 shrink-0 text-muted-foreground group-open:block"
+              aria-hidden="true"
+            />
+          </>
+        )}
+      </summary>
+      {group.files.length > 0 && <FileTable files={group.files} />}
+    </details>
   )
 }
 
