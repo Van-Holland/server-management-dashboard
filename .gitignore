@@ -25,3 +25,10 @@ tsconfig.tsbuildinfo
 
 # Local copy of the two sweep state files, for developing /media off-server
 .devhost/
+
+# Timestamped safety copies taken before edits/deploys. .env backups carry real
+# secrets, so an untracked .env.bak-* in a git repo is one `git add -A` away
+# from being published. Ignore them by pattern rather than relying on care.
+.env.bak-*
+*.predeploy-*
+*.bak-*
