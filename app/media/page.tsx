@@ -330,7 +330,13 @@ function RecycleBinBlock({ bin, nowMs }: { bin: RecycleBinSnapshot; nowMs: numbe
           {bin.fileCount > 0 && <>{formatBytes(bin.totalBytes)} · </>}
           {bin.retentionDays === null
             ? "retention unknown"
-            : `kept ${bin.retentionDays} days, then deleted automatically`}
+            : bin.retentionDays === 1
+              ? // The cleanup runs once every 24h, so a 1-day setting really
+                // means "at the first sweep after 24h" — i.e. 24 to 48 hours.
+                // Printing a flat "1 day" would promise precision the schedule
+                // does not have, and the difference is a whole extra day.
+                "kept ~1–2 days (the cleanup runs once daily), then deleted automatically"
+              : `kept ${bin.retentionDays} days, then deleted automatically`}
         </p>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
