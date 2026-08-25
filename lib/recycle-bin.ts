@@ -5,7 +5,7 @@ import path from "node:path"
  * What is actually sitting in the recycle bin, and how long it has left.
  *
  * This page has a delete button, and the entire argument for that button being
- * one click rather than three is "the files are recoverable for 7 days". Until
+ * one click rather than three is "the files are recoverable for a while". Until
  * now that claim was only ever *printed* — the dialog said the words and
  * nothing on any screen could confirm them. A safety net you cannot look at is
  * a safety net you are taking on trust, which is the same mistake as reading a
@@ -104,6 +104,54 @@ async function retentionFromSonarr(): Promise<number | null> {
 }
 
 /**
+ * When the cleanup task next runs, and how often.
+ *
+ * Needed because a file is NOT removed the moment it becomes old enough — it is
+ * removed by a task that runs once every 24 hours. Ignoring that produced a
+ * countdown reading "in 1h" for a file that actually had thirteen hours left,
+ * which is precisely the sort of confidently-wrong number this page exists to
+ * stop showing.
+ */
+async function cleanupSchedule(): Promise<{ nextMs: number; intervalMs: number } | null> {
+  const base = process.env.SONARR_URL ?? "http://192.168.178.241:8989"
+  const key = process.env.SONARR_API_KEY
+  if (!key) return null
+  try {
+    const res = await fetch(`${base}/api/v3/system/task`, {
+      headers: { "X-Api-Key": key },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: "no-store",
+    })
+    if (!res.ok) return null
+    const tasks = (await res.json()) as { taskName?: string; interval?: number; nextExecution?: string }[]
+    const task = tasks.find((t) => (t.taskName ?? "").toLowerCase().includes("recyclebin"))
+    if (!task?.nextExecution || !task.interval) return null
+    const nextMs = Date.parse(task.nextExecution)
+    if (!Number.isFinite(nextMs)) return null
+    return { nextMs, intervalMs: task.interval * 60_000 }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The first cleanup run at or after `eligibleMs`.
+ *
+ * A file is deleted on the first sweep that happens once it is older than the
+ * retention window — not at the instant it crosses that line.
+ */
+function removalTime(
+  eligibleMs: number,
+  schedule: { nextMs: number; intervalMs: number } | null,
+): number {
+  if (eligibleMs === 0) return 0
+  if (!schedule) return eligibleMs
+  if (schedule.nextMs >= eligibleMs) return schedule.nextMs
+  const missed = Math.ceil((eligibleMs - schedule.nextMs) / schedule.intervalMs)
+  return schedule.nextMs + missed * schedule.intervalMs
+}
+
+/**
  * Expiry is per FILE, not per folder: Sonarr's cleanup walks the bin and drops
  * anything past its own age. So a folder has two dates worth knowing — when it
  * starts losing files, and when it is finally empty. Collapsing them to one
@@ -118,6 +166,7 @@ function toGroup(
   count: number,
   mtimes: number[],
   retentionDays: number | null,
+  schedule: { nextMs: number; intervalMs: number } | null,
 ): RecycleBinGroup {
   const ms = retentionDays === null ? null : retentionDays * 86_400_000
   const oldest = Math.min(...mtimes)
@@ -127,8 +176,8 @@ function toGroup(
     fileCount: count,
     totalBytes: bytes,
     addedMs: oldest,
-    firstGoesMs: ms === null ? 0 : oldest + ms,
-    emptyMs: ms === null ? 0 : newest + ms,
+    firstGoesMs: ms === null ? 0 : removalTime(oldest + ms, schedule),
+    emptyMs: ms === null ? 0 : removalTime(newest + ms, schedule),
   }
 }
 
@@ -142,7 +191,7 @@ export async function getRecycleBin(): Promise<RecycleBinSnapshot> {
     error: null,
   }
 
-  const retentionDays = await retentionFromSonarr()
+  const [retentionDays, schedule] = await Promise.all([retentionFromSonarr(), cleanupSchedule()])
 
   let entries
   try {
@@ -170,7 +219,7 @@ export async function getRecycleBin(): Promise<RecycleBinSnapshot> {
       if (entry.isDirectory()) {
         const { bytes, count, mtimes } = await walk(full)
         if (count === 0) continue
-        groups.push(toGroup(entry.name, bytes, count, mtimes, retentionDays))
+        groups.push(toGroup(entry.name, bytes, count, mtimes, retentionDays, schedule))
       } else if (entry.isFile()) {
         const s = await stat(full)
         looseBytes += s.size
@@ -186,7 +235,7 @@ export async function getRecycleBin(): Promise<RecycleBinSnapshot> {
   // Files dumped straight into the bin with no series folder — Radarr does this
   // for movies whose folder name does not survive the move.
   if (looseCount > 0) {
-    groups.push(toGroup("(loose files)", looseBytes, looseCount, looseMtimes, retentionDays))
+    groups.push(toGroup("(loose files)", looseBytes, looseCount, looseMtimes, retentionDays, schedule))
   }
 
   // Soonest to expire first — the one worth rescuing is the one about to go.

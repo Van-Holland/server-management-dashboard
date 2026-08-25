@@ -444,7 +444,7 @@ export async function deleteMedia(target: DeleteTarget): Promise<DeleteResult> {
   const jellyseerrOnly = steps.every((s) => s.status !== "failed" || s.step === "Jellyseerr record")
   return {
     ok: jellyseerrOnly,
-    summary: "Deleted. Files are recoverable for 7 days in /downloads/.recyclebin.",
+    summary: "Deleted. The files are in /downloads/.recyclebin until the next cleanup — the Recycle bin panel shows how long.",
     steps,
   }
 }

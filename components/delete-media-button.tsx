@@ -15,7 +15,7 @@ import type { DeleteTarget, DeleteStep } from "@/lib/media-delete"
  * sure" would be the largest change in the feature.
  *
  * One click to confirm, by decision — the recycle bin keeps every deleted file
- * for 7 days, so the cost of a wrong click is a restore rather than a
+ * until the next cleanup, so the cost of a wrong click is a restore rather than a
  * re-download. The dialog still spells out exactly what is about to go: that is
  * information, not friction, and it is the part that makes the single click
  * defensible.
@@ -144,8 +144,9 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
               </li>
             )}
             <li>
-              Files move to <span className="font-mono">/downloads/.recyclebin</span> and are
-              recoverable for 7 days.
+              Files move to <span className="font-mono">/downloads/.recyclebin</span> and stay
+              recoverable until the next cleanup — the Recycle bin panel on this page shows exactly
+              how long each one has left.
             </li>
             <li>Jellyfin is told automatically by {target.kind === "movie" ? "Radarr" : "Sonarr"}.</li>
             <li>

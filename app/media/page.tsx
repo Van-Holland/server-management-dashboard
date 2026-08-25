@@ -629,7 +629,7 @@ export default async function MediaPage() {
         <p className="text-xs text-muted-foreground">
           No grab or search buttons — starting downloads by accident is what the nightly sweep&rsquo;s
           batch cap exists to prevent. Deleting is available and always switches monitoring off too,
-          so nothing re-downloads overnight; files keep for 7 days in{" "}
+          so nothing re-downloads overnight; deleted files wait in{" "}
           <span className="font-mono">/downloads/.recyclebin</span>. Checked{" "}
           {clock(snapshot.checkedMs)}.
         </p>
