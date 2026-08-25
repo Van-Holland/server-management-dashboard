@@ -241,6 +241,18 @@ function nextRunAfter(now: Date): number {
   return next.getTime()
 }
 
+/**
+ * The upgrade list itself, not just its size.
+ *
+ * Membership has to come from here rather than from the sweep's state file.
+ * The state file only changes when the sweep runs, so between runs it goes
+ * stale in the one direction that misleads: on 2026-08-25 six Silo episodes
+ * reached 4K overnight and left the list, and the page still showed them as
+ * "still hunting" — 28 flagged against a live count of 22. Reading the live
+ * list costs one already-made request returning more rows.
+ */
+type CutoffPage = { totalRecords: number; records?: { id: number }[] }
+
 type ProfileItem = { quality?: { id: number; name: string }; id?: number; name?: string }
 type Profile = {
   id: number
@@ -292,11 +304,13 @@ async function loadSonarr(
 
     const [profiles, cutoff] = await Promise.all([
       api<Profile[]>(base, key, "/api/v3/qualityprofile"),
-      api<{ totalRecords: number }>(base, key, "/api/v3/wanted/cutoff?pageSize=1"),
+      api<CutoffPage>(base, key, "/api/v3/wanted/cutoff?pageSize=500"),
     ])
 
     // Report the profile the library actually uses, not profile 1. If shows are
     // split across profiles, the most-used one is shown and the rest are noted.
+    const unmet = new Set((cutoff.records ?? []).map((r) => r.id))
+
     const counts = new Map<number, number>()
     for (const s of series) counts.set(s.qualityProfileId, (counts.get(s.qualityProfileId) ?? 0) + 1)
     const mainId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
@@ -341,7 +355,7 @@ async function loadSonarr(
           codec: ep.episodeFile.mediaInfo?.videoCodec ?? null,
           resolutionHeight: height,
           customFormatScore: ep.episodeFile.customFormatScore ?? 0,
-          wantsUpgrade: Boolean(st),
+          wantsUpgrade: unmet.has(ep.id),
           lane: st ? ((st.lane as "fast" | "slow") ?? null) : null,
           attempts: st ? st.attempts : null,
           lastCheckedMs: st?.lastChecked ? st.lastChecked * 1000 : null,
@@ -397,8 +411,10 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
     const [movies, profiles, cutoff] = await Promise.all([
       api<RadarrMovie[]>(base, key, "/api/v3/movie"),
       api<Profile[]>(base, key, "/api/v3/qualityprofile"),
-      api<{ totalRecords: number }>(base, key, "/api/v3/wanted/cutoff?pageSize=1"),
+      api<CutoffPage>(base, key, "/api/v3/wanted/cutoff?pageSize=500"),
     ])
+
+    const unmet = new Set((cutoff.records ?? []).map((r) => r.id))
 
     const counts = new Map<number, number>()
     for (const m of movies) counts.set(m.qualityProfileId, (counts.get(m.qualityProfileId) ?? 0) + 1)
@@ -447,7 +463,7 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
             codec: m.movieFile.mediaInfo?.videoCodec ?? null,
             resolutionHeight: height,
             customFormatScore: m.movieFile.customFormatScore ?? 0,
-            wantsUpgrade: Boolean(st),
+            wantsUpgrade: unmet.has(m.id),
             lane: st ? ((st.lane as "fast" | "slow") ?? null) : null,
             attempts: st ? st.attempts : null,
             lastCheckedMs: st?.lastChecked ? st.lastChecked * 1000 : null,
