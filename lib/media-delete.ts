@@ -7,7 +7,9 @@
  * no file and go fetch them. Delete an episode at 20:00 without unmonitoring
  * it and it is back before midnight, having spent indexer budget to return.
  *
- * So: **delete the file, then stop wanting it.** Never one without the other.
+ * So: **stop wanting it, THEN delete the file.** Never one without the other,
+ * and never in the other order — see the note above the four operations for
+ * what that cost on the first real delete.
  *
  * Safety, verified live on 2026-08-25 rather than assumed: both Sonarr and
  * Radarr have a recycle bin configured at `/downloads/.recyclebin` with
@@ -23,9 +25,24 @@
  * here. Confirmed against the live `/api/v3/notification` on both apps.
  */
 
-/** Deletes move real files. Generous next to the 6s read timeout, because
- *  removing a 60 GB remux to the recycle bin is not instant. */
-const TIMEOUT_MS = 30_000
+/**
+ * Two timeouts, because two very different things happen here.
+ *
+ * Reading metadata and flipping a monitored flag are sub-second calls.
+ * Deleting is not: Sonarr mounts `/downloads` and `/tv` as SEPARATE bind
+ * mounts, so although both sit on the same host filesystem (/dev/sda1), a
+ * rename between them inside the container fails with EXDEV and Sonarr falls
+ * back to **copy-then-delete** at roughly 58 MB/s. A 22 GB season therefore
+ * takes six to eight minutes of real copying.
+ *
+ * This was measured the hard way on 2026-08-25: a 30s timeout on a 10-episode
+ * Landman season aborted the HTTP request while Sonarr carried on working in
+ * the background — the client gave up, the server did not. Note the vault's
+ * claim that the recycle bin is "same filesystem so moves are instant" is true
+ * of the host and false of the only place it matters, inside the container.
+ */
+const META_TIMEOUT_MS = 15_000
+const DELETE_TIMEOUT_MS = 600_000
 
 /**
  * What the UI can ask to remove.
@@ -52,7 +69,13 @@ export type DeleteTarget =
  */
 export type DeleteStep = {
   step: string
-  status: "done" | "skipped" | "failed"
+  /**
+   * "running" is not a failure. A large season genuinely takes minutes to copy
+   * into the recycle bin, and aborting the HTTP request does not stop the arr
+   * app — so the honest report is "still going", and crucially NOT something
+   * that invites the user to press Delete again.
+   */
+  status: "done" | "skipped" | "failed" | "running"
   detail: string
 }
 
@@ -80,6 +103,10 @@ function arrConfig(app: ArrApp): { base: string; key: string } {
   return { base, key }
 }
 
+/** Thrown when a file-deleting call outlives its timeout. Distinct from a
+ *  failure on purpose — see the catch in deleteMedia. */
+class StillRunningError extends Error {}
+
 /**
  * Sonarr and Radarr answer a successful DELETE with an empty body, and
  * `res.json()` on an empty body throws — which would report a successful
@@ -91,18 +118,33 @@ async function arr<T>(
   method: "GET" | "PUT" | "POST" | "DELETE",
   path: string,
   body?: unknown,
+  timeoutMs: number = META_TIMEOUT_MS,
 ): Promise<T> {
   const { base, key } = arrConfig(app)
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: {
-      "X-Api-Key": key,
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    cache: "no-store",
-  })
+  let res: Response
+  try {
+    res = await fetch(`${base}${path}`, {
+      method,
+      headers: {
+        "X-Api-Key": key,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: "no-store",
+    })
+  } catch (err) {
+    // Aborting the request does NOT stop the arr app — verified live: the
+    // client gave up at 30s and Sonarr kept copying files for minutes after.
+    // So a timeout on a delete means "still going", not "did not happen", and
+    // saying "failed" here would be a lie that invites a destructive retry.
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new StillRunningError(
+        `${app} is still working — the request timed out, the deletion did not stop`,
+      )
+    }
+    throw err
+  }
   const text = await res.text()
   if (!res.ok) {
     // The arr apps put a human-readable reason in `message`; surfacing that
@@ -168,7 +210,7 @@ async function clearJellyseerr(mediaType: "movie" | "tv", arrId: number): Promis
   try {
     const list = await fetch(`${base}/api/v1/media?take=200`, {
       headers: { "X-Api-Key": key },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(META_TIMEOUT_MS),
       cache: "no-store",
     })
     if (!list.ok) throw new Error(`HTTP ${list.status} listing media`)
@@ -187,7 +229,7 @@ async function clearJellyseerr(mediaType: "movie" | "tv", arrId: number): Promis
     const del = await fetch(`${base}/api/v1/media/${match.id}`, {
       method: "DELETE",
       headers: { "X-Api-Key": key },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(META_TIMEOUT_MS),
       cache: "no-store",
     })
     if (!del.ok) throw new Error(`HTTP ${del.status} deleting record ${match.id}`)
@@ -219,10 +261,37 @@ async function clearJellyseerr(mediaType: "movie" | "tv", arrId: number): Promis
  * uses — they differ, and an unrecognised query parameter is silently ignored,
  * which would hide a mistake rather than surface one.
  */
+/**
+ * ORDER MATTERS, and getting it wrong is what went wrong on 2026-08-25.
+ *
+ * Unmonitoring happens FIRST, before a single byte is deleted, in every one of
+ * the four operations below. The original code did the opposite and a timeout
+ * left the worst reachable state: three episode files deleted, all ten episodes
+ * still monitored — which is exactly what the 23:00 sweep hunts for, so the
+ * season would have re-downloaded itself overnight.
+ *
+ * Reversed, a timeout is harmless. Files may be half-gone, but nothing is
+ * monitored, so nothing comes back and the deletion finishes on its own.
+ * "Unmonitor first" costs one extra API call and removes the only outcome here
+ * that could actually cost money and bandwidth.
+ *
+ * The spread-the-fetched-object pattern is load-bearing: Radarr and Sonarr PUT
+ * replaces the whole resource, and the local types are deliberately narrower
+ * than what comes back. Do not rebuild these objects by hand — every unlisted
+ * field (path, quality profile, tags) would be wiped.
+ */
 async function deleteMovie(movieId: number): Promise<DeleteStep[]> {
   const steps: DeleteStep[] = []
   const movie = await arr<RadarrMovie>("radarr", "GET", `/api/v3/movie/${movieId}`)
-  await arr("radarr", "DELETE", `/api/v3/movie/${movieId}?deleteFiles=true`)
+
+  await arr("radarr", "PUT", `/api/v3/movie/${movieId}`, { ...movie, monitored: false })
+  steps.push({
+    step: "Monitoring",
+    status: "done",
+    detail: "switched off first, so a slow delete cannot leave this re-downloadable",
+  })
+
+  await arr("radarr", "DELETE", `/api/v3/movie/${movieId}?deleteFiles=true`, undefined, DELETE_TIMEOUT_MS)
   steps.push({
     step: "Radarr",
     status: "done",
@@ -235,7 +304,21 @@ async function deleteMovie(movieId: number): Promise<DeleteStep[]> {
 async function deleteSeries(seriesId: number): Promise<DeleteStep[]> {
   const steps: DeleteStep[] = []
   const series = await arr<SonarrSeries>("sonarr", "GET", `/api/v3/series/${seriesId}`)
-  await arr("sonarr", "DELETE", `/api/v3/series/${seriesId}?deleteFiles=true`)
+
+  // Sonarr will not search for an episode whose SERIES is unmonitored, so this
+  // one call covers every episode without touching them individually.
+  await arr("sonarr", "PUT", `/api/v3/series/${seriesId}`, {
+    ...series,
+    monitored: false,
+    seasons: series.seasons.map((s) => ({ ...s, monitored: false })),
+  })
+  steps.push({
+    step: "Monitoring",
+    status: "done",
+    detail: "switched off first, so a slow delete cannot leave episodes re-downloadable",
+  })
+
+  await arr("sonarr", "DELETE", `/api/v3/series/${seriesId}?deleteFiles=true`, undefined, DELETE_TIMEOUT_MS)
   steps.push({
     step: "Sonarr",
     status: "done",
@@ -256,10 +339,29 @@ async function deleteSeason(seriesId: number, seasonNumber: number): Promise<Del
   const inSeason = episodes.filter((e) => e.seasonNumber === seasonNumber)
   const fileIds = inSeason.filter((e) => e.hasFile && e.episodeFileId > 0).map((e) => e.episodeFileId)
 
+  // Both halves are needed. The season flag stops future episodes being wanted;
+  // the per-episode flags stop the ones about to be deleted from being
+  // re-fetched tonight. Sonarr searches on the EPISODE flag, so the season flag
+  // alone would not have saved anything.
+  await arr("sonarr", "PUT", "/api/v3/episode/monitor", {
+    episodeIds: inSeason.map((e) => e.id),
+    monitored: false,
+  })
+  const series = await arr<SonarrSeries>("sonarr", "GET", `/api/v3/series/${seriesId}`)
+  const seasons = series.seasons.map((s) =>
+    s.seasonNumber === seasonNumber ? { ...s, monitored: false } : s,
+  )
+  await arr("sonarr", "PUT", `/api/v3/series/${seriesId}`, { ...series, seasons })
+  steps.push({
+    step: "Monitoring",
+    status: "done",
+    detail: `season ${seasonNumber} and its ${inSeason.length} episodes unmonitored first — nothing here can re-download, even if the delete below runs long`,
+  })
+
   if (fileIds.length > 0) {
     // The bulk endpoint rejects an empty list with a 500 ("Sequence contains no
-    // elements") rather than treating it as a no-op, hence the guard above.
-    await arr("sonarr", "DELETE", "/api/v3/episodefile/bulk", { episodeFileIds: fileIds })
+    // elements") rather than treating it as a no-op, hence the guard.
+    await arr("sonarr", "DELETE", "/api/v3/episodefile/bulk", { episodeFileIds: fileIds }, DELETE_TIMEOUT_MS)
     steps.push({
       step: "Files",
       status: "done",
@@ -269,30 +371,6 @@ async function deleteSeason(seriesId: number, seasonNumber: number): Promise<Del
     steps.push({ step: "Files", status: "skipped", detail: "this season had no files on disk" })
   }
 
-  // Both halves are needed. Unmonitoring the season stops future episodes being
-  // wanted; unmonitoring the existing episodes stops the ones just deleted from
-  // being re-fetched tonight. Doing only the first leaves every deleted episode
-  // individually monitored and missing, which is exactly what the 23:00 sweep
-  // hunts for.
-  await arr("sonarr", "PUT", "/api/v3/episode/monitor", {
-    episodeIds: inSeason.map((e) => e.id),
-    monitored: false,
-  })
-  const series = await arr<SonarrSeries>("sonarr", "GET", `/api/v3/series/${seriesId}`)
-  const seasons = series.seasons.map((s) =>
-    s.seasonNumber === seasonNumber ? { ...s, monitored: false } : s,
-  )
-  // Sonarr's PUT replaces the whole series resource, so the fetched object is
-  // spread back verbatim with only `seasons` swapped. The SonarrSeries type is
-  // deliberately narrower than what actually comes back — do NOT "tidy" this
-  // into a hand-built object, or every unlisted field (path, quality profile,
-  // tags) is wiped on save.
-  await arr("sonarr", "PUT", `/api/v3/series/${seriesId}`, { ...series, seasons })
-  steps.push({
-    step: "Monitoring",
-    status: "done",
-    detail: `season ${seasonNumber} and its ${inSeason.length} episodes unmonitored — the nightly sweep will not re-download them`,
-  })
   return steps
 }
 
@@ -302,9 +380,6 @@ async function deleteEpisode(
   episodeFileId: number,
 ): Promise<DeleteStep[]> {
   const steps: DeleteStep[] = []
-  await arr("sonarr", "DELETE", `/api/v3/episodefile/${episodeFileId}`)
-  steps.push({ step: "File", status: "done", detail: "sent to the recycle bin" })
-
   await arr("sonarr", "PUT", "/api/v3/episode/monitor", {
     episodeIds: [episodeId],
     monitored: false,
@@ -312,8 +387,11 @@ async function deleteEpisode(
   steps.push({
     step: "Monitoring",
     status: "done",
-    detail: "episode unmonitored — the nightly sweep will not re-download it",
+    detail: "episode unmonitored first — the nightly sweep will not re-download it",
   })
+
+  await arr("sonarr", "DELETE", `/api/v3/episodefile/${episodeFileId}`, undefined, DELETE_TIMEOUT_MS)
+  steps.push({ step: "File", status: "done", detail: "sent to the recycle bin" })
   return steps
 }
 
@@ -339,9 +417,20 @@ export async function deleteMedia(target: DeleteTarget): Promise<DeleteResult> {
         break
     }
   } catch (err) {
-    // Whatever succeeded before the throw is still reported. Knowing the files
-    // went but the unmonitor did not is the difference between "done" and
-    // "it will come back tonight, go and fix it".
+    if (err instanceof StillRunningError) {
+      // Monitoring is already off by this point — every operation does that
+      // first — so an unfinished delete is safe to simply leave alone.
+      steps.push({ step: "Files", status: "running", detail: err.message })
+      return {
+        ok: true,
+        summary:
+          "Monitoring is off and the files are still being moved to the recycle bin. This finishes on its own — do not press Delete again.",
+        steps,
+      }
+    }
+    // Whatever succeeded before the throw is still reported. Because
+    // unmonitoring now runs first, the remaining failure modes leave files in
+    // place rather than leaving them wanted.
     steps.push({
       step: "Failed",
       status: "failed",

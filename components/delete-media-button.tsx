@@ -43,6 +43,16 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<{ summary: string; steps: DeleteStep[] } | null>(null)
+  /**
+   * One attempt per opening of the dialog.
+   *
+   * On 2026-08-25 a season delete timed out, the dialog stayed open with a live
+   * Delete button, and the operation was fired a second time while Sonarr was
+   * still working through the first — which is why two files landed in the
+   * recycle bin twice, as `..._2.mkv`. A destructive action that has already
+   * been sent must not be one click away from being sent again.
+   */
+  const [attempted, setAttempted] = useState(false)
 
   function open(event: React.MouseEvent) {
     // This button sits inside a <summary> and inside a table row. Without both
@@ -51,11 +61,13 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
     event.preventDefault()
     event.stopPropagation()
     setFailure(null)
+    setAttempted(false)
     dialogRef.current?.showModal()
   }
 
   async function confirm() {
     setBusy(true)
+    setAttempted(true)
     setFailure(null)
     try {
       const res = await fetch("/api/media/delete", {
@@ -64,6 +76,14 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
         body: JSON.stringify(target),
       })
       const result = (await res.json()) as { ok: boolean; summary: string; steps: DeleteStep[] }
+      if (result.steps.some((s) => s.status === "running")) {
+        // Deliberately kept on screen rather than closed: the page would
+        // re-render mid-delete and show a half-emptied season, which reads as
+        // a bug. The message says it finishes on its own.
+        setFailure({ summary: result.summary, steps: result.steps })
+        router.refresh()
+        return
+      }
       if (!result.ok) {
         // Kept on screen rather than closed-and-toasted. A half-completed
         // delete is precisely the case where the individual steps matter:
@@ -101,7 +121,10 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
         ref={dialogRef}
         // The backdrop is styled in globals.css — ::backdrop cannot be reached
         // from a Tailwind utility on the element itself.
-        className="max-w-md rounded-xl border border-border bg-card p-0 text-foreground backdrop:bg-black/60"
+        // `text-left` is not cosmetic padding: season buttons live in a
+        // `text-right` table cell and the dialog inherits that alignment,
+        // which rendered the whole dialog right-aligned.
+        className="max-w-md rounded-xl border border-border bg-card p-0 text-left text-foreground backdrop:bg-black/60"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5">
@@ -125,11 +148,33 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
               recoverable for 7 days.
             </li>
             <li>Jellyfin is told automatically by {target.kind === "movie" ? "Radarr" : "Sonarr"}.</li>
+            <li>
+              Large deletes take minutes — the recycle bin is a separate mount inside the container,
+              so files are copied at roughly 58 MB/s rather than moved instantly. Monitoring is
+              switched off <span className="font-medium text-foreground">before</span> anything is
+              deleted, so a slow delete is safe to leave alone.
+            </li>
           </ul>
 
           {failure && (
-            <div className="mt-3 rounded-lg border border-usage-high/40 p-3">
-              <p className="text-xs font-medium text-usage-high">{failure.summary}</p>
+            // A still-running delete must not be dressed as an error. Red here
+            // is what made a slow-but-working operation look like a broken one.
+            <div
+              className={`mt-3 rounded-lg border p-3 ${
+                failure.steps.some((s) => s.status === "running")
+                  ? "border-border"
+                  : "border-usage-high/40"
+              }`}
+            >
+              <p
+                className={`text-xs font-medium ${
+                  failure.steps.some((s) => s.status === "running")
+                    ? "text-foreground"
+                    : "text-usage-high"
+                }`}
+              >
+                {failure.summary}
+              </p>
               <ul className="mt-1.5 space-y-0.5">
                 {failure.steps.map((s, i) => (
                   <li key={`${s.step}-${i}`} className="font-mono text-[0.7rem] text-muted-foreground">
@@ -152,11 +197,14 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
             <button
               type="button"
               onClick={confirm}
-              disabled={busy}
+              // Disabled once sent, not merely while in flight. Re-sending a
+              // delete that is still running duplicates work in the recycle bin
+              // and cannot help.
+              disabled={busy || attempted}
               className="inline-flex items-center gap-1.5 rounded-lg bg-usage-high px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-              {busy ? "Deleting…" : "Delete"}
+              {busy ? "Deleting…" : attempted ? "Sent" : "Delete"}
             </button>
           </div>
         </div>
