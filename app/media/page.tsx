@@ -11,6 +11,7 @@ import {
   type UpgradeRules,
 } from "@/lib/media"
 import { DeleteMediaButton } from "@/components/delete-media-button"
+import { getRecycleBin, timeLeft, type RecycleBinSnapshot } from "@/lib/recycle-bin"
 
 /** Columns in the file table, so the season header's colSpan cannot drift out
  *  of step with the header row above it. */
@@ -307,6 +308,89 @@ function GroupBlock({ group }: { group: MediaGroup }) {
   )
 }
 
+/**
+ * The safety net, made visible.
+ *
+ * This page can delete things, and the case for a single-click confirm rests
+ * entirely on deleted files being recoverable for a week. That claim was
+ * previously only ever printed in the confirm dialog — nothing on any screen
+ * could show it was true. This block is the difference between being told and
+ * being able to look.
+ *
+ * Read-only, and no restore control on purpose: putting a file back also needs
+ * a Sonarr rescan and the episode re-monitored, and a half-done restore looks
+ * exactly like a finished one.
+ */
+function RecycleBinBlock({ bin, nowMs }: { bin: RecycleBinSnapshot; nowMs: number }) {
+  return (
+    <section>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="text-sm font-medium text-foreground">Recycle bin</h2>
+        <p className="text-xs text-muted-foreground">
+          {bin.fileCount > 0 && <>{formatBytes(bin.totalBytes)} · </>}
+          {bin.retentionDays === null
+            ? "retention unknown"
+            : `kept ${bin.retentionDays} days, then deleted automatically`}
+        </p>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Everything deleted from this page lands here first — nothing is unlinked directly.{" "}
+        <span className="font-mono">{bin.path.replace("/host/storage8tb", "/mnt/storage8tb")}</span>
+      </p>
+
+      <div className="mt-3 rounded-xl border border-border bg-card p-5">
+        {bin.error ? (
+          <p className="text-xs text-usage-high">{bin.error}</p>
+        ) : bin.groups.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Empty — nothing has been deleted recently, or the last batch has already aged out.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[30rem] text-left">
+              <thead>
+                <tr className="text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+                  <th className="pb-1 pr-3 font-medium">What</th>
+                  <th className="pb-1 pr-3 text-right font-medium">Files</th>
+                  <th className="pb-1 pr-3 text-right font-medium">Size</th>
+                  <th className="pb-1 pr-3 font-medium">Deleted</th>
+                  <th className="pb-1 text-right font-medium">Gone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bin.groups.map((g) => {
+                  // Under a day left is worth flagging: the cleanup runs once
+                  // daily, so "tomorrow" is the last chance, not a warning shot.
+                  const urgent = g.firstGoesMs !== 0 && g.firstGoesMs - nowMs < 86_400_000
+                  return (
+                    <tr key={g.name} className="border-t border-border/60">
+                      <td className="py-2 pr-3 text-xs text-foreground">{g.name}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {g.fileCount}
+                      </td>
+                      <td className="py-2 pr-3 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {formatBytes(g.totalBytes)}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
+                        {clock(g.addedMs)}
+                      </td>
+                      <td className="py-2 text-right text-xs">
+                        <span className={urgent ? "font-semibold text-usage-high" : "text-muted-foreground"}>
+                          {timeLeft(g.firstGoesMs, nowMs)}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function RulesBlock({ rules }: { rules: UpgradeRules }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
@@ -356,7 +440,7 @@ function RulesBlock({ rules }: { rules: UpgradeRules }) {
 }
 
 export default async function MediaPage() {
-  const snapshot = await getMedia()
+  const [snapshot, bin] = await Promise.all([getMedia(), getRecycleBin()])
 
   const series = snapshot.groups.filter((g) => g.kind === "series")
   const movies = snapshot.groups.filter((g) => g.kind === "movie")
@@ -515,6 +599,8 @@ export default async function MediaPage() {
             )}
           </div>
         </section>
+
+        <RecycleBinBlock bin={bin} nowMs={snapshot.checkedMs} />
 
         <section>
           <h2 className="text-sm font-medium text-foreground">TV</h2>
