@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react"
 import Link from "next/link"
 import { ArrowLeft, ChevronDown, ChevronRight, Clock, Film, Gauge, Tv } from "lucide-react"
 import {
@@ -9,6 +10,16 @@ import {
   type MediaGroup,
   type UpgradeRules,
 } from "@/lib/media"
+import { DeleteMediaButton } from "@/components/delete-media-button"
+
+/** Columns in the file table, so the season header's colSpan cannot drift out
+ *  of step with the header row above it. */
+const DATA_COLUMNS = 7
+
+/** Season 0 is where Sonarr files specials, and "Season 0" reads like a bug. */
+function seasonLabel(n: number): string {
+  return n === 0 ? "Specials" : `Season ${n}`
+}
 
 // Reads live API state and files on every request — must never be frozen into
 // a build-time snapshot. Same reason as the other routes.
@@ -31,7 +42,7 @@ function clock(ms: number): string {
   })
 }
 
-function FileRow({ file }: { file: MediaFile }) {
+function FileRow({ file, action }: { file: MediaFile; action: ReactNode }) {
   return (
     <tr className="border-t border-border/60">
       <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{file.label}</td>
@@ -55,7 +66,7 @@ function FileRow({ file }: { file: MediaFile }) {
           {file.customFormatScore}
         </span>
       </td>
-      <td className="py-2 text-right text-xs">
+      <td className="py-2 pr-3 text-right text-xs">
         {file.wantsUpgrade ? (
           <span className="text-muted-foreground">
             {file.lane === "slow" ? "monthly" : "every 4d"}
@@ -67,6 +78,7 @@ function FileRow({ file }: { file: MediaFile }) {
           <span className="text-muted-foreground opacity-50">done</span>
         )}
       </td>
+      <td className="py-1 text-right">{action}</td>
     </tr>
   )
 }
@@ -121,10 +133,27 @@ function GroupSummary({ group, thin }: { group: MediaGroup; thin: number }) {
   )
 }
 
-function FileTable({ files }: { files: MediaFile[] }) {
+/**
+ * Episodes are grouped under a season header, which is new as of the delete
+ * feature and not merely decorative: "delete this season" needs somewhere to
+ * live, and a flat list of 20 episodes has no such place. Films skip all of
+ * this — a one-file group needs no grouping, and its delete lives on the group
+ * header where it removes the film outright.
+ */
+function FileTable({ group }: { group: MediaGroup }) {
+  const bySeason = new Map<number, MediaFile[]>()
+  for (const f of group.files) {
+    // Files arrive sorted by label ("S01E01"…), so insertion order here is
+    // already season order and no second sort is needed.
+    const n = f.seasonNumber ?? -1
+    const bucket = bySeason.get(n)
+    if (bucket) bucket.push(f)
+    else bySeason.set(n, [f])
+  }
+
   return (
     <div className="overflow-x-auto px-5 pb-4">
-      <table className="w-full min-w-[38rem] text-left">
+      <table className="w-full min-w-[40rem] text-left">
         <thead>
           <tr className="text-[0.7rem] uppercase tracking-wide text-muted-foreground">
             <th className="pb-1 pr-3 font-medium">Item</th>
@@ -133,13 +162,67 @@ function FileTable({ files }: { files: MediaFile[] }) {
             <th className="pb-1 pr-3 text-right font-medium">Bitrate</th>
             <th className="pb-1 pr-3 text-right font-medium">Runtime</th>
             <th className="pb-1 pr-3 text-right font-medium">Score</th>
-            <th className="pb-1 text-right font-medium">Rechecked</th>
+            <th className="pb-1 pr-3 text-right font-medium">Rechecked</th>
+            <th className="pb-1 text-right font-medium">
+              <span className="sr-only">Delete</span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {files.map((f) => (
-            <FileRow key={f.key} file={f} />
-          ))}
+          {group.kind === "movie"
+            ? group.files.map((f) => <FileRow key={f.key} file={f} action={null} />)
+            : [...bySeason.entries()].map(([seasonNumber, files]) => (
+                <Fragment key={seasonNumber}>
+                  <tr className="border-t border-border/60 bg-secondary/20">
+                    <td colSpan={DATA_COLUMNS} className="py-1.5 pr-3 text-xs font-medium text-foreground">
+                      {seasonLabel(seasonNumber)}
+                      {/* A real separator, not just a margin: without it the
+                          text content reads "Season 16 files" to a screen
+                          reader and to anyone copying the row. */}
+                      <span className="ml-2 font-normal text-muted-foreground">
+                        · {files.length} file{files.length === 1 ? "" : "s"} ·{" "}
+                        {formatBytes(files.reduce((n, f) => n + f.sizeBytes, 0))}
+                      </span>
+                    </td>
+                    <td className="py-1 text-right">
+                      <DeleteMediaButton
+                        size="sm"
+                        target={{ kind: "season", id: group.arrId, seasonNumber }}
+                        title={`${group.title} — ${seasonLabel(seasonNumber)}`}
+                        detail={`${files.length} file${files.length === 1 ? "" : "s"} · ${formatBytes(
+                          files.reduce((n, f) => n + f.sizeBytes, 0),
+                        )}`}
+                        removesEntry={false}
+                      />
+                    </td>
+                  </tr>
+                  {files.map((f) => (
+                    <FileRow
+                      key={f.key}
+                      file={f}
+                      action={
+                        // Both ids are required by the API route, so a row that
+                        // somehow lacks either gets no button rather than a
+                        // button that fails when pressed.
+                        f.episodeId !== null && f.episodeFileId !== null ? (
+                          <DeleteMediaButton
+                            size="sm"
+                            target={{
+                              kind: "episode",
+                              id: group.arrId,
+                              episodeId: f.episodeId,
+                              episodeFileId: f.episodeFileId,
+                            }}
+                            title={`${group.title} — ${f.label}`}
+                            detail={`${f.quality} · ${formatBytes(f.sizeBytes)}`}
+                            removesEntry={false}
+                          />
+                        ) : null
+                      }
+                    />
+                  ))}
+                </Fragment>
+              ))}
         </tbody>
       </table>
     </div>
@@ -160,11 +243,35 @@ function FileTable({ files }: { files: MediaFile[] }) {
 function GroupBlock({ group }: { group: MediaGroup }) {
   const thin = group.files.filter((f) => f.thin).length
 
+  /*
+   * The group-level delete is the only one that removes the ENTRY rather than
+   * just files: the film or show leaves Radarr/Sonarr and its Jellyseerr record
+   * is cleared. That is why `removesEntry` is true here and false everywhere
+   * else — the dialog says something materially different in each case.
+   */
+  const removeEntry = (
+    <DeleteMediaButton
+      target={
+        group.kind === "movie"
+          ? { kind: "movie", id: group.arrId }
+          : { kind: "series", id: group.arrId }
+      }
+      title={group.title}
+      detail={
+        group.files.length === 0
+          ? "Nothing on disk — this removes the entry only"
+          : `${group.files.length} file${group.files.length === 1 ? "" : "s"} · ${formatBytes(group.totalBytes)}`
+      }
+      removesEntry
+    />
+  )
+
   if (group.files.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-4">
           <GroupSummary group={group} thin={thin} />
+          {removeEntry}
         </div>
       </div>
     )
@@ -191,8 +298,11 @@ function GroupBlock({ group }: { group: MediaGroup }) {
           className="hidden size-4 shrink-0 text-muted-foreground group-open:block"
           aria-hidden="true"
         />
+        {/* Inside the <summary>, so the button itself must stop the click from
+            toggling the disclosure — handled in DeleteMediaButton. */}
+        {removeEntry}
       </summary>
-      <FileTable files={group.files} />
+      <FileTable group={group} />
     </details>
   )
 }
@@ -425,7 +535,11 @@ export default async function MediaPage() {
         </section>
 
         <p className="text-xs text-muted-foreground">
-          Read-only by design — no grab, delete, or search buttons. Checked {clock(snapshot.checkedMs)}.
+          No grab or search buttons — starting downloads by accident is what the nightly sweep&rsquo;s
+          batch cap exists to prevent. Deleting is available and always switches monitoring off too,
+          so nothing re-downloads overnight; files keep for 7 days in{" "}
+          <span className="font-mono">/downloads/.recyclebin</span>. Checked{" "}
+          {clock(snapshot.checkedMs)}.
         </p>
       </div>
     </main>

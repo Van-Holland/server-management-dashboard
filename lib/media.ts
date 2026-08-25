@@ -14,10 +14,20 @@ import { readFile } from "node:fs/promises"
  * for the runt, every day, for three weeks. So every file here carries its size
  * and its measured bitrate, and those are the numbers given prominence.
  *
- * Everything is READ-ONLY. There are deliberately no grab, delete, or
+ * Reading is READ-ONLY and stays that way. There are deliberately no grab or
  * search-now actions — a dashboard that can start downloads is a dashboard that
  * can start them by accident, and the whole point of the nightly sweep's batch
  * cap is keeping the indexer budget under control.
+ *
+ * Deleting is the one exception, added 2026-08-25, and the exception is
+ * narrow on purpose. The argument above has two halves and only one of them
+ * survives here: an accidental delete costs no indexer budget at all, and since
+ * every delete goes through Sonarr/Radarr it lands in their recycle bin
+ * (`/downloads/.recyclebin`, 7-day retention, verified live on both apps) — so
+ * the worst case is a restore, not a re-download. The "by accident" half still
+ * applies, which is why the delete path lives in lib/media-delete.ts behind a
+ * confirmation that names what is going, and why it always pairs a file
+ * deletion with an unmonitor. This module still only reads.
  */
 
 /**
@@ -61,6 +71,18 @@ export type MediaFile = {
   /** Namespaced the same way the sweep's state file does: "sonarr:74". */
   key: string
   label: string
+  /**
+   * Sonarr's own ids, needed to delete and to unmonitor — null on films.
+   *
+   * These are three different numbers and confusing them silently deletes the
+   * wrong thing: `key` carries the EPISODE id, `episodeFileId` is the id of the
+   * file on disk, and only the latter is what `DELETE /episodefile/{id}`
+   * accepts. Both are carried explicitly rather than parsed back out of `key`.
+   */
+  episodeId: number | null
+  episodeFileId: number | null
+  /** Null on films. Season 0 is real — Sonarr stores specials there. */
+  seasonNumber: number | null
   quality: string
   sizeBytes: number
   runtimeSec: number | null
@@ -90,6 +112,14 @@ export type MediaFile = {
 export type MediaGroup = {
   id: string
   title: string
+  /**
+   * The Sonarr series id or Radarr movie id, unprefixed.
+   *
+   * `id` above is a DOM key ("series-13") and is not interchangeable with this.
+   * This is also the number Jellyseerr stores as `externalServiceId`, which is
+   * how a deleted title is matched back to its request record.
+   */
+  arrId: number
   kind: "series" | "movie"
   files: MediaFile[]
   totalBytes: number
@@ -276,6 +306,7 @@ type SonarrEpisode = {
   episodeNumber: number
   monitored: boolean
   hasFile: boolean
+  episodeFileId: number
   episodeFile?: {
     quality: { quality: { name: string } }
     size: number
@@ -348,6 +379,9 @@ async function loadSonarr(
         files.push({
           key: `sonarr:${ep.id}`,
           label: `S${String(ep.seasonNumber).padStart(2, "0")}E${String(ep.episodeNumber).padStart(2, "0")}`,
+          episodeId: ep.id,
+          episodeFileId: ep.episodeFileId,
+          seasonNumber: ep.seasonNumber,
           quality: ep.episodeFile.quality.quality.name,
           sizeBytes: ep.episodeFile.size,
           runtimeSec,
@@ -366,6 +400,7 @@ async function loadSonarr(
       if (files.length > 0 || missing > 0) {
         groups.push({
           id: `series-${s.id}`,
+          arrId: s.id,
           title: s.title,
           kind: "series",
           files,
@@ -436,6 +471,7 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
       if (!m.hasFile || !m.movieFile) {
         groups.push({
           id: `movie-${m.id}`,
+          arrId: m.id,
           title: `${m.title} (${m.year})`,
           kind: "movie",
           files: [],
@@ -450,12 +486,19 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
       const height = heightFrom(m.movieFile.mediaInfo?.resolution)
       groups.push({
         id: `movie-${m.id}`,
+        arrId: m.id,
         title: `${m.title} (${m.year})`,
         kind: "movie",
         files: [
           {
             key: `radarr:${m.id}`,
             label: "Film",
+            // Films have no episode or season identity. Carrying null rather
+            // than reusing the movie id keeps a film from ever being routed
+            // into a Sonarr call by mistake.
+            episodeId: null,
+            episodeFileId: null,
+            seasonNumber: null,
             quality: m.movieFile.quality.quality.name,
             sizeBytes: m.movieFile.size,
             runtimeSec,
