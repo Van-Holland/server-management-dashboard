@@ -145,6 +145,118 @@ function rcloneSummary(log: string): string | null {
   return parts.join(", ")
 }
 
+/** Parses one `2026/08/13 03:13:23` stamp on its own, rather than a whole line. */
+function parseRcloneTs(stamp: string): number | null {
+  const m = RCLONE_TS.exec(stamp)
+  if (!m) return null
+  const [, y, mo, d, h, mi, s] = m
+  return new Date(+y, +mo - 1, +d, +h, +mi, +s).getTime()
+}
+
+/**
+ * Splits the log into runs, so the last run that SUCCEEDED can be reported
+ * separately from the last run that merely STARTED.
+ *
+ * Why this exists (2026-08-28). This leg used to date itself from the newest
+ * timestamp anywhere in the log, and take its transfer numbers from the last
+ * stats block anywhere in the log. A run that dies still writes timestamps, and
+ * it writes no stats — so a crashed run silently inherited the previous night's
+ * success. The 03:00 job failed on two consecutive nights against a dead Proton
+ * token while this page read "OK — 120 files, 3.172 MiB", numbers from two days
+ * earlier. Failure looked exactly like success, which is the single thing this
+ * page exists to prevent. The other two Proton legs already had a completion
+ * check; this one, the leg covering the whole of Proton Drive, had none.
+ *
+ * `Starting transaction limiter` is the only per-run marker rclone writes at
+ * INFO level, and it appears because the cron job passes `--tpslimit`. If that
+ * flag is ever dropped no start markers are found, and this falls back to the
+ * old timestamp behaviour rather than inventing a failure it cannot prove.
+ *
+ * KNOWN LIMIT, stated rather than hidden: rclone's *periodic* stats block and
+ * its *final* stats block are byte-identical, so the log carries no true
+ * completion marker and none can be invented from the reader side. What is
+ * detected here is a run that logged CRITICAL (rclone's fatal-exit level), or
+ * one that produced no stats at all — which together cover every auth/startup
+ * failure, the realistic mode for this job. A run killed halfway *after*
+ * transferring something would still read as complete. Closing that gap needs a
+ * completion marker written by the job itself, the way the Van Holland script
+ * and immich-backup.sh both do. Tracked in the Server Dashboard To-Do.
+ */
+const RCLONE_RUN_START = /^(\d{4}\/\d{2}\/\d{2} [\d:]+) INFO\s*: Starting transaction limiter/gm
+
+/** rclone logs CRITICAL only when a run aborts, so this is positive proof of
+ *  failure rather than an inference from silence. */
+const RCLONE_FATAL = /^\d{4}\/\d{2}\/\d{2} [\d:]+ CRITICAL\s*:/m
+
+/** A stats block. Per the KNOWN LIMIT above, its presence proves the run got
+ *  past startup, not that it reached the end.
+ *  Deliberately NOT /g — both of these are used with .test(), which mutates
+ *  lastIndex on a global regex and would then skip matches on the next call. */
+const RCLONE_STATS = /^Transferred:\s+\d+ \/ \d+, \d+%\s*$/m
+
+type RcloneRuns = {
+  /** Newest run that produced stats and did not abort. */
+  lastGoodMs: number | null
+  /** Newest run that started, whether or not it got anywhere. */
+  lastStartedMs: number | null
+  /** The newest run aborted, or never got past startup. */
+  failed: boolean
+  /** Why, in the page's own words — null when the last run looks fine. */
+  failureNote: string | null
+  /** Transfer summary of the last GOOD run. Never a stale one. */
+  summary: string | null
+}
+
+function rcloneRuns(log: string): RcloneRuns {
+  const starts = [...log.matchAll(RCLONE_RUN_START)]
+
+  if (starts.length === 0) {
+    return {
+      lastGoodMs: lastRcloneTimestamp(log),
+      lastStartedMs: null,
+      failed: false,
+      failureNote: null,
+      summary: rcloneSummary(log),
+    }
+  }
+
+  const sliceFor = (i: number) => {
+    const from = starts[i].index ?? 0
+    const to = i + 1 < starts.length ? (starts[i + 1].index ?? log.length) : log.length
+    return log.slice(from, to)
+  }
+
+  let lastGoodMs: number | null = null
+  let summary: string | null = null
+
+  for (let i = 0; i < starts.length; i++) {
+    const slice = sliceFor(i)
+    if (RCLONE_FATAL.test(slice)) continue
+    if (!RCLONE_STATS.test(slice)) continue
+    lastGoodMs = parseRcloneTs(starts[i][1])
+    summary = rcloneSummary(slice)
+  }
+
+  const lastIdx = starts.length - 1
+  const lastSlice = sliceFor(lastIdx)
+
+  let failureNote: string | null = null
+  if (RCLONE_FATAL.test(lastSlice)) {
+    failureNote =
+      "The last run aborted — rclone logged CRITICAL and copied nothing. Check the Proton token and the log."
+  } else if (!RCLONE_STATS.test(lastSlice)) {
+    failureNote = "The last run started but never got far enough to transfer anything."
+  }
+
+  return {
+    lastGoodMs,
+    lastStartedMs: parseRcloneTs(starts[lastIdx][1]),
+    failed: failureNote !== null,
+    failureNote,
+    summary,
+  }
+}
+
 /**
  * Counts rclone ERROR lines belonging to the LAST run only.
  *
@@ -186,9 +298,14 @@ function rcloneErrors(log: string, lastRunMs: number | null): number {
 
 async function protonToHdd(): Promise<BackupLeg> {
   const log = await readTail(RCLONE_LOG)
-  const lastRunMs = log ? lastRcloneTimestamp(log) : null
+  const runs = log ? rcloneRuns(log) : null
+
+  // Age is measured from the last run that actually FINISHED. A run that
+  // started and died must not reset the clock — letting it do so is precisely
+  // what made two consecutive failed nights render as "OK, 8h ago".
+  const lastRunMs = runs?.lastGoodMs ?? null
   const age = hoursSince(lastRunMs)
-  const errors = log ? rcloneErrors(log, lastRunMs) : 0
+  const errors = log ? rcloneErrors(log, runs?.lastStartedMs ?? lastRunMs) : 0
 
   let verdict = judge(age, 27, 36)
   let note: string | null = null
@@ -196,6 +313,14 @@ async function protonToHdd(): Promise<BackupLeg> {
   if (!log) {
     verdict = "unknown"
     note = "Log file unreadable — the job's status cannot be established either way."
+    noteTone = "warn"
+  } else if (runs?.failed) {
+    // Same spirit as the Van Holland leg below: positive evidence of a failed
+    // run beats an inference from staleness. Checked before the age verdicts
+    // because it is the more specific answer — and because a job that fails
+    // fast every night is never "late", which is exactly how this stayed green.
+    verdict = "failed"
+    note = runs.failureNote
     noteTone = "warn"
   } else if (verdict === "overdue") {
     note = "Has not run since well past its scheduled window. Check cron and the Proton token."
@@ -218,7 +343,7 @@ async function protonToHdd(): Promise<BackupLeg> {
     lastRunMs,
     ageHours: age,
     verdict,
-    detail: log ? rcloneSummary(log) : null,
+    detail: runs?.summary ?? null,
     note,
     noteTone,
   }
