@@ -383,7 +383,7 @@ function DownloadsCard({ downloads }: { downloads: DownloadsSnapshot | null }) {
     <CardShell
       icon={Download}
       title="Downloads"
-      subtitle="Active Queue (qBittorrent + SABnzbd)"
+      subtitle="Active Queue (qBittorrent + SABnzbd + slskd)"
       className="sm:col-span-2 lg:col-span-2"
     >
       {active ? (
