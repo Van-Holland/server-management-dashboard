@@ -5,7 +5,7 @@ export type DownloadItem = {
   bytesPerSec: number
   /** Seconds remaining, or null when the client can't estimate one yet. */
   etaSeconds: number | null
-  source: "qBittorrent" | "SABnzbd"
+  source: "qBittorrent" | "SABnzbd" | "slskd"
 }
 
 export type DownloadsSnapshot = {
@@ -20,6 +20,9 @@ export type DownloadsSnapshot = {
 
 const QBIT_URL = process.env.QBIT_URL ?? "http://192.168.178.241:8080"
 const SAB_URL = process.env.SAB_URL ?? "http://192.168.178.241:8081"
+// slskd shares gluetun's network namespace, so this port is published by
+// gluetun rather than by slskd's own compose file.
+const SLSKD_URL = process.env.SLSKD_URL ?? "http://192.168.178.241:5030"
 const REQUEST_TIMEOUT_MS = 4000
 
 // qBittorrent reports this when it has no meaningful estimate.
@@ -158,9 +161,70 @@ async function getSabDownloads(): Promise<DownloadItem[]> {
   })
 }
 
+// --- slskd (Soulseek) ------------------------------------------------------
+type SlskdFile = {
+  filename: string
+  size: number
+  state: string
+  bytesTransferred: number
+  averageSpeed: number
+  bytesRemaining: number
+  removed: boolean
+}
+type SlskdDirectory = { directory: string; fileCount: number; files: SlskdFile[] }
+type SlskdUser = { username: string; directories: SlskdDirectory[] }
+
+async function getSlskdDownloads(): Promise<DownloadItem[]> {
+  const apiKey = process.env.SLSKD_API_KEY
+  if (!apiKey) throw new Error("SLSKD_API_KEY not set")
+
+  const response = await fetch(`${SLSKD_URL}/api/v0/transfers/downloads`, {
+    headers: { "X-API-Key": apiKey },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+  const users = (await response.json()) as SlskdUser[]
+
+  // Soulseek queues one FILE at a time, so a 16-track album arrives as 16 rows.
+  // Aggregate per directory to match qBittorrent (one row per torrent) and
+  // SABnzbd (one row per job) — otherwise a single album floods the card.
+  return users.flatMap((user) =>
+    user.directories.flatMap((dir) => {
+      // Anything "Completed, *" is finished (succeeded, cancelled or errored
+      // alike) and does not belong on a card about what is downloading now.
+      const active = dir.files.filter((file) => !file.removed && !file.state.startsWith("Completed"))
+      if (active.length === 0) return []
+
+      const size = active.reduce((sum, file) => sum + file.size, 0)
+      const transferred = active.reduce((sum, file) => sum + file.bytesTransferred, 0)
+      const remaining = active.reduce((sum, file) => sum + file.bytesRemaining, 0)
+      // averageSpeed is each file's average since it started, not an
+      // instantaneous rate, so this total is indicative rather than exact.
+      // Queued-but-not-started files report 0, which is what we want.
+      const bytesPerSec = active.reduce((sum, file) => sum + file.averageSpeed, 0)
+
+      return [
+        {
+          // Paths come back Windows-style: "@@user\\Music\\Artist\\Album (1997)".
+          name: dir.directory.split("\\").pop() || dir.directory,
+          progress: size > 0 ? (transferred / size) * 100 : 0,
+          bytesPerSec,
+          etaSeconds: bytesPerSec > 0 ? Math.round(remaining / bytesPerSec) : null,
+          source: "slskd" as const,
+        },
+      ]
+    }),
+  )
+}
+
 // --- Combined --------------------------------------------------------------
 export async function getDownloads(): Promise<DownloadsSnapshot> {
-  const [qbit, sab] = await Promise.allSettled([getQbitDownloads(), getSabDownloads()])
+  const [qbit, sab, slskd] = await Promise.allSettled([
+    getQbitDownloads(),
+    getSabDownloads(),
+    getSlskdDownloads(),
+  ])
 
   const items: DownloadItem[] = []
   const errors: string[] = []
@@ -170,6 +234,9 @@ export async function getDownloads(): Promise<DownloadsSnapshot> {
 
   if (sab.status === "fulfilled") items.push(...sab.value)
   else errors.push(`SABnzbd: ${sab.reason?.message ?? "unreachable"}`)
+
+  if (slskd.status === "fulfilled") items.push(...slskd.value)
+  else errors.push(`slskd: ${slskd.reason?.message ?? "unreachable"}`)
 
   // Busiest first — the card only has room to name a couple of them.
   items.sort((a, b) => b.bytesPerSec - a.bytesPerSec)
