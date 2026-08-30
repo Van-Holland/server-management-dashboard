@@ -11,6 +11,9 @@ import {
   Download,
   Ticket,
   CloudDownload,
+  Music,
+  Disc3,
+  Share2,
   ArrowUpRight,
   type LucideIcon,
 } from "lucide-react"
@@ -38,6 +41,7 @@ const groups: Group[] = [
     apps: [
       { name: "Jellyfin", description: "Media server", href: `http://${TS_IP}:8096`, icon: Clapperboard },
       { name: "Immich", description: "Photos & videos", href: `http://${TS_IP}:2283`, icon: Images },
+      { name: "Navidrome", description: "Music streaming", href: `http://${TS_IP}:4533`, icon: Music },
     ],
   },
   {
@@ -46,6 +50,7 @@ const groups: Group[] = [
       { name: "Sonarr", description: "TV shows", href: `http://${TS_IP}:8989`, icon: Tv },
       { name: "Radarr", description: "Movies", href: `http://${TS_IP}:7878`, icon: Film },
       { name: "Bazarr", description: "Subtitles", href: `http://${TS_IP}:6767`, icon: Captions },
+      { name: "Lidarr", description: "Music", href: `http://${TS_IP}:8686`, icon: Disc3 },
       { name: "Prowlarr", description: "Indexers", href: `http://${TS_IP}:9696`, icon: Search },
     ],
   },
@@ -54,6 +59,9 @@ const groups: Group[] = [
     apps: [
       { name: "qBittorrent", description: "Torrent client", href: `http://${TS_IP}:8080`, icon: Download },
       { name: "SABnzbd", description: "Usenet client", href: `http://${TS_IP}:8081`, icon: CloudDownload },
+      // slskd's web UI is published by gluetun, not by slskd's own compose — it
+      // shares gluetun's network namespace. Port 5030 all the same.
+      { name: "slskd", description: "Soulseek client", href: `http://${TS_IP}:5030`, icon: Share2 },
       { name: "Jellyseerr", description: "Media requests", href: `http://${TS_IP}:5055`, icon: Ticket },
     ],
   },
