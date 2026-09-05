@@ -14,6 +14,7 @@ import {
   Music,
   Disc3,
   Share2,
+  Wallet,
   ArrowUpRight,
   type LucideIcon,
 } from "lucide-react"
@@ -31,8 +32,14 @@ type Group = {
 }
 
 // Tailscale IP:port for each service — matches the ports confirmed live via
-// `docker ps` on mulderserver. No `tailscale serve`, no per-app hostnames —
-// deliberate choice, same as the rest of the homelab (see instructions.md).
+// `docker ps` on mulderserver. Raw IP:port, no per-app hostnames — deliberate
+// choice, same as the rest of the homelab (see instructions.md).
+//
+// ONE EXCEPTION, added 2026-09-05: Actual Budget cannot use this and carries its
+// own full URL below. It needs SharedArrayBuffer, which browsers only expose in
+// a secure context, so plain http://IP:port kills the app at startup. It is
+// served over HTTPS by `tailscale serve` instead. If a second service ever
+// needs this, stop special-casing and give every tile a full `href`.
 const TS_IP = "100.69.6.89"
 
 const groups: Group[] = [
@@ -63,6 +70,20 @@ const groups: Group[] = [
       // shares gluetun's network namespace. Port 5030 all the same.
       { name: "slskd", description: "Soulseek client", href: `http://${TS_IP}:5030`, icon: Share2 },
       { name: "Jellyseerr", description: "Media requests", href: `http://${TS_IP}:5055`, icon: Ticket },
+    ],
+  },
+  {
+    title: "Finance",
+    apps: [
+      // Full HTTPS URL on purpose — NOT `http://${TS_IP}:5006`. See the note on
+      // TS_IP above: on plain HTTP this app fails to start entirely. Still
+      // tailnet-only; `tailscale serve` terminates TLS on the tailnet.
+      {
+        name: "Actual Budget",
+        description: "Personal finance",
+        href: "https://mulderserver.taild9b5b8.ts.net",
+        icon: Wallet,
+      },
     ],
   },
 ]
