@@ -62,6 +62,8 @@ const HOST = "/host/root"
 const RCLONE_LOG = `${HOST}/home/matt/rclone-backup.log`
 const VHPM_LOG = `${HOST}/home/matt/vhpm-dashboard-backup.log`
 const IMMICH_LOG = `${HOST}/home/matt/immich-backup.log`
+/** Written by /home/matt/scripts/fitness-backup.sh at the end of every nightly run, including runs with nothing to back up. */
+const FITNESS_STATUS = `${HOST}/home/matt/fitness-backup-status.json`
 const TIMEMACHINE = "/host/storage8tb/backups/timemachine"
 const STATUS_DIR = `${HOST}/home/matt/backup-status`
 /** Run boundaries live in a fixed-size state file, NOT in the log. readTail
@@ -397,6 +399,66 @@ async function vanHollandToProton(): Promise<BackupLeg> {
 }
 
 /**
+ * The Fitness Tracker database: nightly to the HDD and to Proton Drive (added 2026-10-19).
+ * The script writes a small status file on every run, even when nothing changed, so the file's age is the heartbeat:
+ * a missing or old file means the job did not run, and `ok: false` means it ran and something failed.
+ * Like the legs above this says the job RAN, not that the copy is restorable. A restore of the HDD copy was
+ * tried by hand on 2026-10-19 (opened read-only, integrity check ok, same workout count as the live database).
+ */
+type FitnessStatus = {
+  ranAtIso: string
+  ok: boolean
+  localOk: boolean
+  protonOk: boolean
+  changed: boolean
+  sessions: number
+  bodyEntries: number
+  note: string
+}
+
+async function fitnessToProton(): Promise<BackupLeg> {
+  let status: FitnessStatus | null = null
+  try {
+    status = JSON.parse(await readFile(FITNESS_STATUS, "utf-8")) as FitnessStatus
+  } catch {
+    status = null
+  }
+
+  const lastRunMs = status ? new Date(status.ranAtIso).getTime() : null
+  const age = hoursSince(lastRunMs)
+
+  let verdict = judge(age, 27, 36)
+  let note: string | null = null
+
+  if (!status) {
+    verdict = "unknown"
+    note = "Status file unreadable — the job's status cannot be established either way."
+  } else if (!status.ok) {
+    verdict = "failed"
+    note = status.note
+  } else if (verdict === "overdue") {
+    note = "No run recorded since well past its 02:30 slot."
+  } else if (verdict === "late") {
+    note = "Later than its 02:30 slot but not yet alarming."
+  }
+
+  return {
+    id: "fitness-to-proton",
+    name: "Fitness Tracker → HDD and Proton Drive",
+    protects: "Workouts and weigh-ins (the app's database)",
+    destination: "HDD: backups/server/fitness-tracker · protondrive:3. Backup/Fitness Tracker",
+    offsite: true,
+    schedule: "Nightly, 02:30",
+    lastRunMs,
+    ageHours: age,
+    verdict,
+    detail: status ? `${status.sessions} workouts, ${status.bodyEntries} weigh-ins` : null,
+    note,
+    noteTone: "warn",
+  }
+}
+
+/**
  * Leg 6: the Immich photo library going off-site to Proton Drive.
  *
  * This log is written by BOTH immich-backup.sh (its own `YYYY-MM-DD hh:mm:ss
@@ -703,6 +765,7 @@ export async function getBackups(): Promise<BackupsSnapshot> {
   const settled = await Promise.allSettled([
     protonToHdd(),
     vanHollandToProton(),
+    fitnessToProton(),
     immichToProton(),
     timeMachine(),
   ])
