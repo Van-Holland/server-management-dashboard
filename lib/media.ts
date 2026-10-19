@@ -123,8 +123,27 @@ export type MediaGroup = {
   kind: "series" | "movie"
   files: MediaFile[]
   totalBytes: number
-  /** Episodes/movies monitored but with no file at all. */
+  /**
+   * Monitored, no file, AND already released or aired — i.e. genuinely missing.
+   * An episode that airs next Friday is not missing, and counting it as such
+   * put a red "5 missing" on a show that was simply between weekly episodes.
+   */
   missingCount: number
+  /** Monitored, no file, not out yet. Shown quietly, never as a warning. */
+  upcomingCount: number
+  /** Every monitored episode without a file, aired or not, for the detail table. */
+  missingEpisodes: MissingEpisode[]
+}
+
+export type MissingEpisode = {
+  /** Same "S02E06" shape as MediaFile.label, so the two sort together. */
+  label: string
+  seasonNumber: number
+  title: string | null
+  /** Null when Sonarr has no air date yet ("TBA"). */
+  airDateMs: number | null
+  /** False for future and undated episodes. */
+  aired: boolean
 }
 
 export type UpgradeRules = {
@@ -304,6 +323,8 @@ type SonarrEpisode = {
   id: number
   seasonNumber: number
   episodeNumber: number
+  title?: string
+  airDateUtc?: string
   monitored: boolean
   hasFile: boolean
   episodeFileId: number
@@ -366,10 +387,22 @@ async function loadSonarr(
         `/api/v3/episode?seriesId=${s.id}&includeEpisodeFile=true`,
       )
       const files: MediaFile[] = []
-      let missing = 0
+      const missingEpisodes: MissingEpisode[] = []
+      const nowMs = Date.now()
       for (const ep of episodes) {
         if (!ep.hasFile || !ep.episodeFile) {
-          if (ep.monitored) missing += 1
+          if (ep.monitored) {
+            const airDateMs = ep.airDateUtc ? Date.parse(ep.airDateUtc) : Number.NaN
+            missingEpisodes.push({
+              label: `S${String(ep.seasonNumber).padStart(2, "0")}E${String(ep.episodeNumber).padStart(2, "0")}`,
+              seasonNumber: ep.seasonNumber,
+              title: ep.title ?? null,
+              airDateMs: Number.isFinite(airDateMs) ? airDateMs : null,
+              // Same rule Sonarr's own Missing tab uses: aired means the air
+              // date has passed. No date at all counts as not aired yet.
+              aired: Number.isFinite(airDateMs) && airDateMs <= nowMs,
+            })
+          }
           continue
         }
         const st = state[`sonarr:${ep.id}`]
@@ -397,7 +430,8 @@ async function loadSonarr(
         })
       }
       files.sort((a, b) => a.label.localeCompare(b.label))
-      if (files.length > 0 || missing > 0) {
+      missingEpisodes.sort((a, b) => a.label.localeCompare(b.label))
+      if (files.length > 0 || missingEpisodes.length > 0) {
         groups.push({
           id: `series-${s.id}`,
           arrId: s.id,
@@ -405,7 +439,9 @@ async function loadSonarr(
           kind: "series",
           files,
           totalBytes: files.reduce((n, f) => n + f.sizeBytes, 0),
-          missingCount: missing,
+          missingCount: missingEpisodes.filter((m) => m.aired).length,
+          upcomingCount: missingEpisodes.filter((m) => !m.aired).length,
+          missingEpisodes,
         })
       }
     }
@@ -422,6 +458,8 @@ type RadarrMovie = {
   year: number
   monitored: boolean
   hasFile: boolean
+  /** Radarr's own "is it out yet" flag. Absent is treated as out. */
+  isAvailable?: boolean
   qualityProfileId: number
   movieFile?: {
     quality: { quality: { name: string } }
@@ -476,7 +514,11 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
           kind: "movie",
           files: [],
           totalBytes: 0,
-          missingCount: m.monitored ? 1 : 0,
+          // A monitored film with no file is missing only once it is out. Before
+          // that it is simply upcoming (Radarr's isAvailable decides which).
+          missingCount: m.monitored && m.isAvailable !== false ? 1 : 0,
+          upcomingCount: m.monitored && m.isAvailable === false ? 1 : 0,
+          missingEpisodes: [],
         })
         continue
       }
@@ -515,6 +557,8 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
         ],
         totalBytes: m.movieFile.size,
         missingCount: 0,
+        upcomingCount: 0,
+        missingEpisodes: [],
       })
     }
   } catch (err) {

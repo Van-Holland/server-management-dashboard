@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { Film, Search, Tv, X } from "lucide-react"
 import { formatBytes, formatMbps, formatRuntime } from "@/lib/media-format"
-import type { MediaFile, MediaGroup } from "@/lib/media"
+import type { MediaFile, MediaGroup, MissingEpisode } from "@/lib/media"
 import { DeleteMediaButton } from "@/components/delete-media-button"
 
 /**
@@ -45,6 +45,17 @@ function qualityBadge(g: MediaGroup): string | null {
 function lowestBitrate(g: MediaGroup): number {
   const rates = g.files.map((f) => f.bitrateBps).filter((b): b is number => b !== null)
   return rates.length > 0 ? Math.min(...rates) : Number.POSITIVE_INFINITY
+}
+
+/** "Fri 23 Oct". Fixed to the server's timezone so server and browser agree. */
+function airDate(ms: number | null): string | null {
+  if (ms === null) return null
+  return new Date(ms).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Europe/Amsterdam",
+  })
 }
 
 function Poster({ group }: { group: MediaGroup }) {
@@ -98,7 +109,7 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
             <Badge className="bg-black/70 text-white">{quality}</Badge>
           </span>
         )}
-        {(thin > 0 || group.missingCount > 0) && (
+        {(thin > 0 || group.missingCount > 0 || group.upcomingCount > 0) && (
           <span className="absolute bottom-2 left-2 flex flex-col items-start gap-1">
             {thin > 0 && (
               <Badge className="bg-usage-mid text-black">{isSeries ? `${thin} thin` : "thin"}</Badge>
@@ -108,6 +119,11 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
                 {isSeries && !empty ? `${group.missingCount} missing` : "missing"}
               </Badge>
             )}
+            {group.upcomingCount > 0 && (
+              <Badge className="bg-black/70 text-white">
+                {isSeries && !empty ? `${group.upcomingCount} coming` : "coming"}
+              </Badge>
+            )}
           </span>
         )}
       </div>
@@ -115,7 +131,9 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
         <p className="truncate text-sm font-medium text-foreground">{group.title}</p>
         <p className="truncate text-xs text-muted-foreground">
           {empty
-            ? "Not downloaded"
+            ? group.missingCount === 0 && group.upcomingCount > 0
+              ? "Not out yet"
+              : "Not downloaded"
             : isSeries
               ? `${group.files.length} ep · ${formatBytes(group.totalBytes)}`
               : formatBytes(group.totalBytes)}
@@ -152,15 +170,41 @@ function FileRow({ file, action }: { file: MediaFile; action: React.ReactNode })
 /** Columns before the delete column, so a season header's colSpan cannot drift. */
 const DATA_COLUMNS = 5
 
+type Row = { kind: "file"; file: MediaFile } | { kind: "missing"; episode: MissingEpisode }
+
+/** A gap in the season: faded, so it reads as "not here" next to real files. */
+function MissingRow({ episode }: { episode: MissingEpisode }) {
+  const date = airDate(episode.airDateMs)
+  return (
+    <tr className="border-t border-border/60">
+      <td className="py-2 pr-3 font-mono text-xs text-muted-foreground/60">{episode.label}</td>
+      <td colSpan={DATA_COLUMNS - 1} className="py-2 pr-3 text-xs">
+        <span className="flex items-baseline justify-between gap-3">
+          <span className="truncate text-muted-foreground/60">{episode.title ?? "TBA"}</span>
+          {episode.aired ? (
+            <span className="shrink-0 font-medium text-usage-high">missing</span>
+          ) : (
+            <span className="shrink-0 text-muted-foreground">{date ? `airs ${date}` : "date not set"}</span>
+          )}
+        </span>
+      </td>
+      <td />
+    </tr>
+  )
+}
+
 function FileTable({ group }: { group: MediaGroup }) {
-  const bySeason = new Map<number, MediaFile[]>()
-  for (const f of group.files) {
-    // Files arrive sorted by label ("S01E01"…), so insertion order is season order.
-    const n = f.seasonNumber ?? -1
+  const bySeason = new Map<number, Row[]>()
+  const push = (n: number, row: Row) => {
     const bucket = bySeason.get(n)
-    if (bucket) bucket.push(f)
-    else bySeason.set(n, [f])
+    if (bucket) bucket.push(row)
+    else bySeason.set(n, [row])
   }
+  for (const f of group.files) push(f.seasonNumber ?? -1, { kind: "file", file: f })
+  for (const m of group.missingEpisodes) push(m.seasonNumber, { kind: "missing", episode: m })
+  // Labels are "S02E06", zero-padded, so a plain string sort is episode order.
+  const labelOf = (r: Row) => (r.kind === "file" ? r.file.label : r.episode.label)
+  for (const rows of bySeason.values()) rows.sort((a, b) => labelOf(a).localeCompare(labelOf(b)))
 
   return (
     <div className="overflow-x-auto">
@@ -180,7 +224,10 @@ function FileTable({ group }: { group: MediaGroup }) {
         <tbody>
           {group.kind === "movie"
             ? group.files.map((f) => <FileRow key={f.key} file={f} action={null} />)
-            : [...bySeason.entries()].map(([seasonNumber, files]) => {
+            : [...bySeason.entries()]
+                .sort((a, b) => a[0] - b[0])
+                .map(([seasonNumber, rows]) => {
+                const files = rows.flatMap((r) => (r.kind === "file" ? [r.file] : []))
                 const seasonBytes = files.reduce((n, f) => n + f.sizeBytes, 0)
                 return (
                   <Fragment key={seasonNumber}>
@@ -192,6 +239,8 @@ function FileTable({ group }: { group: MediaGroup }) {
                         </span>
                       </td>
                       <td className="py-1 text-right">
+                        {/* A season of only gaps has no files, so nothing to delete. */}
+                        {files.length > 0 && (
                         <DeleteMediaButton
                           size="sm"
                           target={{ kind: "season", id: group.arrId, seasonNumber }}
@@ -199,32 +248,37 @@ function FileTable({ group }: { group: MediaGroup }) {
                           detail={`${files.length} file${files.length === 1 ? "" : "s"} · ${formatBytes(seasonBytes)}`}
                           removesEntry={false}
                         />
+                        )}
                       </td>
                     </tr>
-                    {files.map((f) => (
+                    {rows.map((r) =>
+                      r.kind === "missing" ? (
+                        <MissingRow key={`missing-${r.episode.label}`} episode={r.episode} />
+                      ) : (
                       <FileRow
-                        key={f.key}
-                        file={f}
+                        key={r.file.key}
+                        file={r.file}
                         action={
                           // Both ids are required by the API route, so a row that
                           // lacks either gets no button rather than one that fails.
-                          f.episodeId !== null && f.episodeFileId !== null ? (
+                          r.file.episodeId !== null && r.file.episodeFileId !== null ? (
                             <DeleteMediaButton
                               size="sm"
                               target={{
                                 kind: "episode",
                                 id: group.arrId,
-                                episodeId: f.episodeId,
-                                episodeFileId: f.episodeFileId,
+                                episodeId: r.file.episodeId,
+                                episodeFileId: r.file.episodeFileId,
                               }}
-                              title={`${group.title} — ${f.label}`}
-                              detail={`${f.quality} · ${formatBytes(f.sizeBytes)}`}
+                              title={`${group.title} — ${r.file.label}`}
+                              detail={`${r.file.quality} · ${formatBytes(r.file.sizeBytes)}`}
                               removesEntry={false}
                             />
                           ) : null
                         }
                       />
-                    ))}
+                      ),
+                    )}
                   </Fragment>
                 )
               })}
@@ -254,6 +308,12 @@ function DetailPanel({ group, onClose }: { group: MediaGroup; onClose: () => voi
             {parts[0]}
             {thin > 0 && <span className="text-usage-high"> · {thin} thin</span>}
             {group.missingCount > 0 && <span className="text-usage-high"> · {group.missingCount} missing</span>}
+            {group.upcomingCount > 0 && (
+              <span>
+                {" "}
+                · {group.kind === "movie" ? "not out yet" : `${group.upcomingCount} not aired yet`}
+              </span>
+            )}
           </p>
         </div>
         <DeleteMediaButton
@@ -269,9 +329,10 @@ function DetailPanel({ group, onClose }: { group: MediaGroup; onClose: () => voi
         <button
           type="button"
           onClick={onClose}
-          // Without this the dialog focuses its first button, which is the
-          // delete icon — a red ring around the most dangerous control.
-          autoFocus
+          // Focused by the dialog effect below (React's autoFocus runs while
+          // the dialog is still closed, so the browser then picks the first
+          // button — the delete icon — and rings the most dangerous control).
+          data-autofocus
           aria-label="Close"
           className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
@@ -279,7 +340,7 @@ function DetailPanel({ group, onClose }: { group: MediaGroup; onClose: () => voi
         </button>
       </div>
 
-      {group.files.length > 0 && (
+      {(group.files.length > 0 || group.missingEpisodes.length > 0) && (
         <div className="mt-5">
           <FileTable group={group} />
         </div>
@@ -322,7 +383,10 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
-    if (selected && !dialog.open) dialog.showModal()
+    if (selected && !dialog.open) {
+      dialog.showModal()
+      dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus()
+    }
     if (!selected && dialog.open) dialog.close()
   }, [selected])
 
