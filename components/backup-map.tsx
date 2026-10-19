@@ -16,11 +16,14 @@ import { formatAge, verdictStyle } from "@/components/backup-status"
  */
 
 type Copy = {
-  legId: string
+  /** The job that makes this copy. Absent when the place IS where the thing lives. */
+  legId?: string
   /** Where the copy is kept, in plain words. */
   where: string
   /** Overrides the leg's own schedule text when that is a long sentence. */
   when?: string
+  /** Shown instead of a schedule for a cell that has no job behind it. */
+  note?: string
 }
 
 type Thing = {
@@ -52,11 +55,22 @@ const THINGS: Thing[] = [
     outside: { legId: "immich-to-proton", where: "Proton Drive" },
   },
   {
-    name: "Notes and documents",
-    about: "Proton Drive and the vault",
+    // The vault is a folder inside Proton Drive, so the Proton-to-8TB job copies it
+    // too; GitHub adds the version history. The AI instructions and skills are files
+    // in the vault, so they are covered by both.
+    name: "Second Brain",
+    about: "Your notes and the AI setup",
     livesOn: "Proton Drive",
     inTheHouse: { legId: "proton-to-hdd", where: "8TB drive" },
-    outside: { legId: "vault-to-github", where: "GitHub (notes only)", when: "When you save" },
+    outside: { legId: "vault-to-github", where: "GitHub (private)", when: "Every save, with history" },
+  },
+  {
+    name: "Proton Drive files",
+    about: "Documents, scans and everything else kept there",
+    livesOn: "Proton Drive",
+    inTheHouse: { legId: "proton-to-hdd", where: "8TB drive" },
+    // Proton Drive is itself outside the house, so the originals are the outside copy.
+    outside: { where: "Proton Drive", note: "the originals live here" },
   },
   {
     name: "Tenant files",
@@ -86,7 +100,7 @@ const THINGS: Thing[] = [
     about: "The encrypted finance files",
     livesOn: "Proton Drive",
     inTheHouse: { legId: "portfolio-mirror", where: "MacBook SSD", when: "When you save" },
-    outside: { legId: "vault-to-github", where: "GitHub (encrypted)", when: "When you save" },
+    outside: { legId: "vault-to-github", where: "GitHub (private)", when: "Encrypted, every save" },
   },
 ]
 
@@ -116,6 +130,21 @@ function CopyCell({
         <div className="flex-1 rounded-xl border border-dashed border-usage-high/40 px-3.5 py-3">
           <p className="text-sm text-usage-high">No copy</p>
           {emptyText && <p className="mt-0.5 text-xs text-muted-foreground">{emptyText}</p>}
+        </div>
+      </div>
+    )
+  }
+
+  if (copy.legId === undefined) {
+    return (
+      <div className="flex flex-col">
+        <p className="mb-1 text-xs text-muted-foreground md:hidden">{heading}</p>
+        <div className="flex-1 rounded-xl border border-border bg-card px-3.5 py-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="size-2 shrink-0 rounded-full bg-muted-foreground" aria-hidden="true" />
+            {copy.where}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{copy.note}</p>
         </div>
       </div>
     )
