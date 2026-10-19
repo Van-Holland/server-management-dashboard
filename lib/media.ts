@@ -121,6 +121,13 @@ export type MediaGroup = {
    */
   arrId: number
   kind: "series" | "movie"
+  /**
+   * True when the title lives in a kids root folder (/kids-films, /kids-series).
+   * Those folders ARE the Jellyfin "Kids" libraries, and the passwordless Kids
+   * user sees nothing else, so the folder is the one source of truth. No genre
+   * guessing: a genre label can be wrong, a folder cannot disagree with Jellyfin.
+   */
+  kids: boolean
   files: MediaFile[]
   totalBytes: number
   /**
@@ -222,6 +229,10 @@ export function parseRuntime(raw: string | null | undefined): number | null {
         ? parts[0] * 60 + parts[1]
         : parts[0]
   return sec > 0 ? sec : null
+}
+
+function isKidsFolder(rootFolder: string | undefined): boolean {
+  return (rootFolder ?? "").replace(/^\//, "").startsWith("kids")
 }
 
 function heightFrom(resolution: string | null | undefined): number | null {
@@ -352,7 +363,7 @@ async function loadSonarr(
   const groups: MediaGroup[] = []
 
   try {
-    const series = await api<{ id: number; title: string; qualityProfileId: number }[]>(base, key, "/api/v3/series")
+    const series = await api<{ id: number; title: string; qualityProfileId: number; rootFolderPath?: string }[]>(base, key, "/api/v3/series")
 
     const [profiles, cutoff] = await Promise.all([
       api<Profile[]>(base, key, "/api/v3/qualityprofile"),
@@ -437,6 +448,7 @@ async function loadSonarr(
           arrId: s.id,
           title: s.title,
           kind: "series",
+          kids: isKidsFolder(s.rootFolderPath),
           files,
           totalBytes: files.reduce((n, f) => n + f.sizeBytes, 0),
           missingCount: missingEpisodes.filter((m) => m.aired).length,
@@ -460,6 +472,7 @@ type RadarrMovie = {
   hasFile: boolean
   /** Radarr's own "is it out yet" flag. Absent is treated as out. */
   isAvailable?: boolean
+  rootFolderPath?: string
   qualityProfileId: number
   movieFile?: {
     quality: { quality: { name: string } }
@@ -512,6 +525,7 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
           arrId: m.id,
           title: `${m.title} (${m.year})`,
           kind: "movie",
+          kids: isKidsFolder(m.rootFolderPath),
           files: [],
           totalBytes: 0,
           // A monitored film with no file is missing only once it is out. Before
@@ -531,6 +545,7 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
         arrId: m.id,
         title: `${m.title} (${m.year})`,
         kind: "movie",
+        kids: isKidsFolder(m.rootFolderPath),
         files: [
           {
             key: `radarr:${m.id}`,

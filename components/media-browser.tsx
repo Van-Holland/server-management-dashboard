@@ -352,21 +352,25 @@ function DetailPanel({ group, onClose }: { group: MediaGroup; onClose: () => voi
 export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
   const [query, setQuery] = useState("")
   const [kind, setKind] = useState<KindFilter>("all")
-  const [onlyThin, setOnlyThin] = useState(false)
+  const [onlyKids, setOnlyKids] = useState(false)
+  // Titles with no file at all are hidden by default, so the grid shows what can
+  // actually be watched. This switches to showing ONLY those.
+  const [onlyEmpty, setOnlyEmpty] = useState(false)
   const [onlyMissing, setOnlyMissing] = useState(false)
   const [sort, setSort] = useState<SortKey>("az")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
-  const thinTitles = groups.filter((g) => thinCount(g) > 0).length
   const missingTitles = groups.filter((g) => g.missingCount > 0).length
+  const emptyTitles = groups.filter((g) => g.files.length === 0).length
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = groups.filter(
       (g) =>
         (kind === "all" || g.kind === kind) &&
-        (!onlyThin || thinCount(g) > 0) &&
+        (!onlyKids || g.kids) &&
+        (onlyEmpty ? g.files.length === 0 : g.files.length > 0) &&
         (!onlyMissing || g.missingCount > 0) &&
         (q === "" || g.title.toLowerCase().includes(q)),
     )
@@ -374,7 +378,7 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
     else if (sort === "bitrate") list.sort((a, b) => lowestBitrate(a) - lowestBitrate(b) || a.title.localeCompare(b.title))
     else list.sort((a, b) => a.title.localeCompare(b.title))
     return list
-  }, [groups, query, kind, onlyThin, onlyMissing, sort])
+  }, [groups, query, kind, onlyKids, onlyEmpty, onlyMissing, sort])
 
   // After a delete the server re-renders without the title; the panel must
   // close rather than keep showing something that no longer exists.
@@ -427,13 +431,24 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
           </button>
         ))}
 
+        {/* Same look as All / TV / Films, but a toggle that combines with them:
+            Kids + Films shows kids' films only. Click again to switch off. */}
+        <button
+          type="button"
+          aria-pressed={onlyKids}
+          onClick={() => setOnlyKids((v) => !v)}
+          className={chip(onlyKids)}
+        >
+          Kids
+        </button>
+
         <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
 
-        <button type="button" onClick={() => setOnlyThin((v) => !v)} className={chip(onlyThin)}>
-          Thin · {thinTitles}
-        </button>
         <button type="button" onClick={() => setOnlyMissing((v) => !v)} className={chip(onlyMissing)}>
           Missing · {missingTitles}
+        </button>
+        <button type="button" onClick={() => setOnlyEmpty((v) => !v)} className={chip(onlyEmpty)}>
+          Not downloaded · {emptyTitles}
         </button>
 
         <label className="ml-auto">
