@@ -1,6 +1,6 @@
 import { HeaderBar } from "@/components/header-bar"
 import { StatsCards } from "@/components/stats-cards"
-import { AppsSection } from "@/components/apps-section"
+import { DailyApps, ToolsSection } from "@/components/apps-section"
 import { BackupCard } from "@/components/backup-status"
 import { HealthBanner } from "@/components/health-banner"
 import { getBackups } from "@/lib/backups"
@@ -28,11 +28,14 @@ export default async function HomePage() {
         <HeaderBar uptime={stats.uptime} />
         {/* Empty unless torrents or an indexer are silently broken. */}
         <HealthBanner warnings={warnings} />
-        <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} />
-        {/* Full-width strip rather than a 7th card: the stats grid is 6 columns
-            precisely so its six cards land as two clean rows of three. */}
-        <BackupCard snapshot={backups} />
-        <AppsSection />
+        {/* Ordered by how often each part is used: the apps first, then how the
+            server is doing, then the tools that are rarely opened. */}
+        <DailyApps />
+        <div className="flex flex-col gap-4">
+          <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} />
+          <BackupCard snapshot={backups} />
+        </div>
+        <ToolsSection />
       </div>
     </main>
   )

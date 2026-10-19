@@ -12,6 +12,7 @@ export function ProgressBar({
   pct,
   label,
   color = "bg-usage-low",
+  size = "md",
 }: {
   pct: number
   label: string
@@ -19,11 +20,13 @@ export function ProgressBar({
   // thing fills up. Downloads pass nothing and stay green, because a download
   // being 90% finished is good news, not a warning.
   color?: string
+  // "sm" is the slim bar in the home page's server summary row.
+  size?: "md" | "sm"
 }) {
   const clamped = Math.min(100, Math.max(0, pct))
   return (
     <div
-      className="h-2.5 w-full overflow-hidden rounded-full bg-secondary"
+      className={`${size === "sm" ? "h-1.5" : "h-2.5"} w-full overflow-hidden rounded-full bg-secondary`}
       role="progressbar"
       aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}

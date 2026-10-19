@@ -7,6 +7,7 @@ import {
   ArrowDown,
   ArrowUp,
   BatteryWarning,
+  ChevronDown,
   ChevronRight,
   Cpu,
   Database,
@@ -459,6 +460,100 @@ function DownloadsCard({ downloads }: { downloads: DownloadsSnapshot | null }) {
 
 // Every card shares one poller and one request. They're returned in a Fragment
 // so each card stays a direct child of the parent grid.
+/**
+ * One small cell of the always-visible server row. The full cards (disk I/O,
+ * speedtest, the download queue, fan and battery) still exist; they live behind
+ * "All server details" so they stop taking the top of the page.
+ */
+function SummaryCell({
+  label,
+  value,
+  pct,
+  color,
+  valueClass = "text-foreground",
+}: {
+  label: string
+  value: string
+  pct: number | null
+  color?: string
+  valueClass?: string
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-sm font-medium tabular-nums sm:truncate ${valueClass}`}>{value}</p>
+      {/* Fixed height so cells without a bar (network) line up with the others. */}
+      <div className="mt-2 h-1.5">
+        {pct !== null && <ProgressBar pct={pct} label={`${label} level`} color={color} size="sm" />}
+      </div>
+    </div>
+  )
+}
+
+function ServerSummary({
+  cpu,
+  ssd,
+  hdd,
+  data,
+}: {
+  cpu: number
+  ssd: DiskStats
+  hdd: DiskStats
+  data: LiveData
+}) {
+  const percent = (disk: DiskStats) => (disk.totalGb > 0 ? Math.round((100 * disk.usedGb) / disk.totalGb) : 0)
+  const ssdPct = percent(ssd)
+  const hddPct = percent(hdd)
+  const fullest = Math.max(ssdPct, hddPct)
+
+  const cpuTemp = data.sensors?.cpuTempC ?? null
+  const onBattery = data.sensors?.power.onAc === false
+  const systemValue = onBattery
+    ? "On battery, mains lost"
+    : `${cpu}% CPU${cpuTemp === null ? "" : ` · ${cpuTemp}°C`}`
+  const systemHot = onBattery || (cpuTemp !== null && cpuTemp >= 80)
+
+  const network = data.rates?.network ?? null
+  const downloads = data.downloads
+  const active = downloads?.items ?? []
+  const averageProgress =
+    active.length > 0 ? active.reduce((sum, item) => sum + item.progress, 0) / active.length : null
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <SummaryCell
+        label="System"
+        value={systemValue}
+        pct={cpu}
+        color={usageColor(cpu)}
+        valueClass={systemHot ? "text-usage-high" : "text-foreground"}
+      />
+      <SummaryCell
+        label="Storage"
+        value={`HDD ${hddPct}% · SSD ${ssdPct}%`}
+        pct={fullest}
+        color={usageColor(fullest)}
+      />
+      <SummaryCell
+        label="Network"
+        value={network ? `${formatSpeed(network.rxBytesPerSec)} down` : "—"}
+        pct={null}
+      />
+      <SummaryCell
+        label="Downloads"
+        value={
+          downloads === null
+            ? "—"
+            : active.length === 0
+              ? "Idle"
+              : `${active.length} active · ${formatSpeed(downloads.totalBytesPerSec)}`
+        }
+        pct={averageProgress}
+      />
+    </div>
+  )
+}
+
 export function LiveCards({ initial }: { initial: InitialStats }) {
   const [data, setData] = useState<LiveData>({
     rates: null,
@@ -545,33 +640,50 @@ export function LiveCards({ initial }: { initial: InitialStats }) {
   const ram = data.capacity?.ram ?? initial.ram
 
   return (
-    <>
-      <DiskCard
-        label="SSD"
-        disk={ssd}
-        io={data.rates?.diskIo.ssd ?? null}
-        tempC={data.sensors?.ssdTempC ?? null}
-        icon={HardDrive}
-      />
-      <DiskCard
-        label="HDD"
-        disk={hdd}
-        io={data.rates?.diskIo.hdd ?? null}
-        tempC={null}
-        icon={Database}
-        // Only the 8TB gets this — it holds the media library. The SSD holds
-        // configs and databases, which /media has nothing to say about.
-        link={{ href: "/media", label: "Media" }}
-      />
-      <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
-      <NetworkCard
-        network={data.rates?.network ?? null}
-        speedtest={data.speedtest}
-        onRunSpeedtest={runSpeedtest}
-        running={running}
-        notice={notice ?? (data.speedtest?.error ? `Last test failed: ${data.speedtest.error}` : null)}
-      />
-      <DownloadsCard downloads={data.downloads} />
-    </>
+    <section aria-labelledby="server-heading">
+      <h2 id="server-heading" className="mb-3 text-sm font-medium text-muted-foreground">
+        Server
+      </h2>
+      <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} />
+
+      <details className="group mt-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="size-4 group-open:hidden" aria-hidden="true" />
+          <ChevronDown className="hidden size-4 group-open:block" aria-hidden="true" />
+          All server details
+        </summary>
+
+        {/* Six columns so the five cards divide into a tidy grid at desktop width;
+            System spans two rows on the right. */}
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          <DiskCard
+            label="SSD"
+            disk={ssd}
+            io={data.rates?.diskIo.ssd ?? null}
+            tempC={data.sensors?.ssdTempC ?? null}
+            icon={HardDrive}
+          />
+          <DiskCard
+            label="HDD"
+            disk={hdd}
+            io={data.rates?.diskIo.hdd ?? null}
+            tempC={null}
+            icon={Database}
+            // Only the 8TB gets this — it holds the media library. The SSD holds
+            // configs and databases, which /media has nothing to say about.
+            link={{ href: "/media", label: "Media" }}
+          />
+          <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
+          <NetworkCard
+            network={data.rates?.network ?? null}
+            speedtest={data.speedtest}
+            onRunSpeedtest={runSpeedtest}
+            running={running}
+            notice={notice ?? (data.speedtest?.error ? `Last test failed: ${data.speedtest.error}` : null)}
+          />
+          <DownloadsCard downloads={data.downloads} />
+        </div>
+      </details>
+    </section>
   )
 }
