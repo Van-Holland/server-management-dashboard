@@ -28,7 +28,7 @@ import {
  *  - Your apps (the big tiles, renamed from "Every day" 2026-10-19). Only apps you
  *    USE live here; Media library and Backups are things you CHECK and sit under Server. Which apps are "every day" is a judgement about this
  *    household's habits, not something the code can know; change DAILY to move one.
- *  - Behind the scenes: closed by default, plain links. They still work, they
+ *  - Tools: closed by default, plain links with a few words each. They still work, they
  *    just stop competing for the top of the page.
  */
 
@@ -58,28 +58,29 @@ const DAILY: Tile[] = [
   { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, icon: Dumbbell, tint: "bg-[#ba7517]" },
 ]
 
-type Tool = { name: string; href: string; icon: LucideIcon }
+type Tool = { name: string; description: string; href: string; icon: LucideIcon }
 type ToolGroup = { title: string; tools: Tool[] }
 
 const TOOLS: ToolGroup[] = [
   {
-    title: "Find and manage",
+    // "Arr stack" is Matthijs's name for Sonarr, Radarr, Lidarr, Bazarr and Prowlarr.
+    title: "Arr stack",
     tools: [
-      { name: "Sonarr", href: `http://${TS_IP}:8989`, icon: Tv },
-      { name: "Radarr", href: `http://${TS_IP}:7878`, icon: Film },
-      { name: "Lidarr", href: `http://${TS_IP}:8686`, icon: Disc3 },
-      { name: "Bazarr", href: `http://${TS_IP}:6767`, icon: Captions },
-      { name: "Prowlarr", href: `http://${TS_IP}:9696`, icon: Search },
+      { name: "Sonarr", description: "TV shows", href: `http://${TS_IP}:8989`, icon: Tv },
+      { name: "Radarr", description: "Films", href: `http://${TS_IP}:7878`, icon: Film },
+      { name: "Lidarr", description: "Music", href: `http://${TS_IP}:8686`, icon: Disc3 },
+      { name: "Bazarr", description: "Subtitles", href: `http://${TS_IP}:6767`, icon: Captions },
+      { name: "Prowlarr", description: "Search sources", href: `http://${TS_IP}:9696`, icon: Search },
     ],
   },
   {
-    title: "Download clients",
+    title: "Downloaders",
     tools: [
-      { name: "qBittorrent", href: `http://${TS_IP}:8080`, icon: Download },
-      { name: "SABnzbd", href: `http://${TS_IP}:8081`, icon: CloudDownload },
+      { name: "qBittorrent", description: "Torrent downloads", href: `http://${TS_IP}:8080`, icon: Download },
+      { name: "SABnzbd", description: "Usenet downloads", href: `http://${TS_IP}:8081`, icon: CloudDownload },
       // slskd's web UI is published by gluetun, not by slskd's own compose: it
       // shares gluetun's network namespace. Port 5030 all the same.
-      { name: "slskd", href: `http://${TS_IP}:5030`, icon: Share2 },
+      { name: "slskd", description: "Music downloads", href: `http://${TS_IP}:5030`, icon: Share2 },
     ],
   },
 ]
@@ -144,8 +145,6 @@ export function DailyApps() {
  * not take effect in this project (see app/media history).
  */
 export function ToolsSection() {
-  const count = TOOLS.reduce((n, g) => n + g.tools.length, 0)
-
   return (
     <details className="group">
       <summary
@@ -153,11 +152,10 @@ export function ToolsSection() {
       >
         <ChevronRight className="size-4 group-open:hidden" aria-hidden="true" />
         <ChevronDown className="hidden size-4 group-open:block" aria-hidden="true" />
-        <span className="font-medium">Behind the scenes</span>
-        <span className="text-xs">{count} tools, rarely opened</span>
+        <span className="font-medium">Tools</span>
       </summary>
 
-      <div className="mt-3 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+      <div className="mt-3 grid gap-x-10 gap-y-5 sm:grid-cols-[repeat(2,minmax(0,22rem))]">
         {TOOLS.map((group) => (
           <div key={group.title}>
             <p className="mb-1 text-xs text-muted-foreground">{group.title}</p>
@@ -174,6 +172,7 @@ export function ToolsSection() {
                     >
                       <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
                       {tool.name}
+                      <span className="ml-auto text-xs text-muted-foreground">{tool.description}</span>
                     </a>
                   </li>
                 )
