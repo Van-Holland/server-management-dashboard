@@ -25,6 +25,7 @@ import type { DownloadsSnapshot } from "@/lib/downloads"
 import type { NetworkRates } from "@/lib/network-stats"
 import type { Sensors } from "@/lib/sensors"
 import type { SpeedtestState } from "@/lib/speedtest"
+import type { Hardware } from "@/lib/hardware"
 import type { DiskStats } from "@/lib/system-stats"
 
 type Capacity = { ssd: DiskStats; hdd: DiskStats; ram: number; uptime: string }
@@ -37,7 +38,7 @@ type LiveData = {
   speedtest: SpeedtestState | null
 }
 
-export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number }
+export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number; hardware: Hardware }
 
 const POLL_MS = 2000
 // The POST returns as soon as the run is queued, but the card only learns it's
@@ -194,42 +195,59 @@ function DiskCard({
   )
 }
 
-function MetricRow({ label, pct }: { label: string; pct: number }) {
+function MetricRow({ label, pct, detail }: { label: string; pct: number; detail?: string }) {
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <span className="font-mono text-xs font-semibold tabular-nums text-foreground">{pct}%</span>
       </div>
+      {detail && <p className="mb-2 truncate text-xs text-foreground">{detail}</p>}
       <ProgressBar pct={pct} label={`${label} usage`} color={usageColor(pct)} />
     </div>
   )
 }
 
-function SystemCard({ cpu, ram }: { cpu: number; ram: number }) {
-  return (
-    <CardShell icon={Cpu} title="System" subtitle="Load" className="lg:col-span-2">
-      <div className="flex flex-col gap-3">
-        <MetricRow label="CPU" pct={cpu} />
-        <MetricRow label="RAM" pct={ram} />
-      </div>
-    </CardShell>
-  )
-}
-
-function HealthCard({ sensors }: { sensors: Sensors | null }) {
+/**
+ * One card for the machine itself: what it is (CPU model, RAM), how hard it is
+ * working (load), and whether it is happy (temperature, fan, mains power).
+ * This used to be two cards, System and Health, side by side.
+ */
+function SystemCard({
+  cpu,
+  ram,
+  hardware,
+  sensors,
+}: {
+  cpu: number
+  ram: number
+  hardware: Hardware
+  sensors: Sensors | null
+}) {
   const cpuTemp = sensors?.cpuTempC ?? null
   const fanRpm = sensors?.fanRpm ?? null
   const power = sensors?.power
   const onBattery = power?.onAc === false
 
+  const ramDetail = hardware.ramGb > 0 ? [`${hardware.ramGb} GB`, hardware.ramKind].filter(Boolean).join(" ") : undefined
+
   return (
-    <CardShell icon={Thermometer} title="Health" subtitle="Temps & Power" className="lg:col-span-2">
-      <div className="grid grid-cols-2 gap-4">
+    <CardShell
+      icon={Cpu}
+      title="System"
+      subtitle={hardware.machine ?? "Load, temperature and power"}
+      className="lg:col-span-2 lg:row-span-2"
+    >
+      <div className="flex flex-col gap-5">
+        <MetricRow label="CPU" pct={cpu} detail={hardware.cpuModel} />
+        <MetricRow label="RAM" pct={ram} detail={ramDetail} />
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-5">
         <div className="flex items-center gap-2">
           <Thermometer className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">CPU</p>
+            <p className="text-xs text-muted-foreground">CPU temp</p>
             <p
               className={`font-mono text-lg font-semibold tabular-nums ${
                 cpuTemp === null ? "text-foreground" : tempColor(cpuTemp, 65, 80)
@@ -274,14 +292,16 @@ function HealthCard({ sensors }: { sensors: Sensors | null }) {
           </div>
 
           <p className="shrink-0 font-mono text-xs tabular-nums">
-            {power && power.batteries.length > 0
-              ? power.batteries.map((battery, index) => (
-                  <span key={battery.name}>
-                    {index > 0 && <span className="px-1 opacity-40">·</span>}
-                    <span className={batteryColor(battery.percent)}>{battery.percent}%</span>
-                  </span>
-                ))
-              : <span className="text-muted-foreground">—</span>}
+            {power && power.batteries.length > 0 ? (
+              power.batteries.map((battery, index) => (
+                <span key={battery.name}>
+                  {index > 0 && <span className="px-1 opacity-40">·</span>}
+                  <span className={batteryColor(battery.percent)}>{battery.percent}%</span>
+                </span>
+              ))
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
           </p>
         </div>
       </div>
@@ -543,8 +563,7 @@ export function LiveCards({ initial }: { initial: InitialStats }) {
         // configs and databases, which /media has nothing to say about.
         link={{ href: "/media", label: "Media" }}
       />
-      <SystemCard cpu={cpu} ram={ram} />
-      <HealthCard sensors={data.sensors} />
+      <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
       <NetworkCard
         network={data.rates?.network ?? null}
         speedtest={data.speedtest}
