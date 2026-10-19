@@ -48,15 +48,11 @@ export type BackupsSnapshot = {
   worst: BackupVerdict
   checkedMs: number
   /** When a restore was last actually performed and verified, or null if never.
-   *  Deliberately not a leg — it is a property of the whole system, not of any
-   *  single job. A date rather than a boolean so the badge can re-arm itself:
-   *  a restore proven once in 2026 says nothing about 2028. */
+   *  Kept as a record only: no screen shows it since 2026-10-19 (the restore badge
+   *  was dropped at Matthijs's request; the reminder to re-test lives in the
+   *  Linux Home Server To-Do). */
   restoreTestedMs: number | null
 }
-
-/** How long a proven restore stays convincing. Past this the badge comes back
- *  on its own — nobody will remember to re-raise it by hand. */
-export const RESTORE_TEST_MAX_AGE_MS = 183 * 24 * 60 * 60 * 1000
 
 const HOST = "/host/root"
 const RCLONE_LOG = `${HOST}/home/matt/rclone-backup.log`
