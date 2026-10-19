@@ -58,8 +58,8 @@ const THINGS: Thing[] = [
     // The vault is a folder inside Proton Drive, so the Proton-to-8TB job copies it
     // too; GitHub adds the version history. The AI instructions and skills are files
     // in the vault, so they are covered by both.
-    name: "Second Brain",
-    about: "Your notes and the AI setup",
+    name: "Second Brain AI system",
+    about: "Vendor-independent: notes, memory, projects, rules and skills for any AI",
     livesOn: "Proton Drive",
     inTheHouse: { legId: "proton-to-hdd", where: "8TB drive" },
     outside: { legId: "vault-to-github", where: "GitHub (private)", when: "Every save, with history" },

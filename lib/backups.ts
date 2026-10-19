@@ -688,7 +688,7 @@ function vaultToGithub(status: VaultStatus | null): BackupLeg {
   return {
     id: "vault-to-github",
     name: "Second Brain vault → GitHub",
-    protects: "Every note, with full version history",
+    protects: "The whole Second Brain: notes, memory, projects, knowledge base, AI rules and skills, as plain text with full version history",
     destination: "GitHub (private repository)",
     offsite: true,
     schedule: "Manual — whenever /save-vault or /end is run",
