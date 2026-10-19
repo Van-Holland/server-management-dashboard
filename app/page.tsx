@@ -1,6 +1,7 @@
 import { HeaderBar } from "@/components/header-bar"
 import { StatsCards } from "@/components/stats-cards"
-import { DailyApps, ToolsSection } from "@/components/apps-section"
+import { DailyApps } from "@/components/apps-section"
+import { ToolsSection } from "@/components/tools-section"
 import { ServerPages } from "@/components/server-pages"
 import { HealthBanner } from "@/components/health-banner"
 import { getBackups } from "@/lib/backups"

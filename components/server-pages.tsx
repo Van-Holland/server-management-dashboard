@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { ArrowRight, LayoutGrid } from "lucide-react"
+import { LayoutGrid } from "lucide-react"
+import type { CSSProperties } from "react"
 import { formatAge, verdictIcon, verdictStyle } from "@/components/backup-status"
 import { formatBytes, type MediaSummary } from "@/lib/media"
 import type { BackupsSnapshot } from "@/lib/backups"
@@ -14,11 +15,11 @@ import type { BackupsSnapshot } from "@/lib/backups"
  */
 
 const cardClass =
-  "group flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+  "panel enter group flex items-center gap-4 rounded-[14px] p-4 transition-colors hover:border-brand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
 function mediaLine(summary: MediaSummary | null): string {
   if (summary === null) return "Browse what is on the server"
-  return `${summary.shows} shows · ${summary.films} films · ${formatBytes(summary.bytes)}`
+  return `${summary.shows} shows, ${summary.films} films, ${formatBytes(summary.bytes)}`
 }
 
 /** "MacBook Time Machine: last backup 19h ago" for the worst job, plus a count of the rest. */
@@ -43,7 +44,7 @@ export function ServerPages({ media, backups }: { media: MediaSummary | null; ba
 
   return (
     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-      <Link href="/media" className={cardClass}>
+      <Link href="/media" className={cardClass} style={{ "--i": 9 } as CSSProperties}>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
           <LayoutGrid className="size-5" aria-hidden="true" />
         </span>
@@ -51,10 +52,9 @@ export function ServerPages({ media, backups }: { media: MediaSummary | null; ba
           <p className="text-sm font-medium text-foreground">Media library</p>
           <p className="text-xs text-muted-foreground sm:truncate">{mediaLine(media)}</p>
         </div>
-        <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" aria-hidden="true" />
       </Link>
 
-      <Link href="/backups" className={cardClass}>
+      <Link href="/backups" className={cardClass} style={{ "--i": 10 } as CSSProperties}>
         <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary ${backupStyle.text}`}>
           <BackupIcon className="size-5" aria-hidden="true" />
         </span>
@@ -62,7 +62,6 @@ export function ServerPages({ media, backups }: { media: MediaSummary | null; ba
           <p className="text-sm font-medium text-foreground">Backups</p>
           <p className={`text-xs sm:truncate ${backupsStatus.tone}`}>{backupsStatus.text}</p>
         </div>
-        <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" aria-hidden="true" />
       </Link>
     </div>
   )

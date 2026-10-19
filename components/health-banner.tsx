@@ -9,7 +9,7 @@ export function HealthBanner({ warnings }: { warnings: HealthWarning[] }) {
   if (warnings.length === 0) return null
 
   return (
-    <div role="alert" className="rounded-xl border border-usage-high/40 bg-card p-5">
+    <div role="alert" className="panel rounded-[14px] border-usage-high/40 p-5">
       <div className="flex items-center gap-2">
         <TriangleAlert className="size-4 text-usage-high" aria-hidden="true" />
         <p className="text-sm font-medium text-usage-high">Needs attention</p>

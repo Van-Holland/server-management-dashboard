@@ -1,9 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Search } from "lucide-react"
 
 export function HeaderBar({ uptime }: { uptime: string }) {
   const [now, setNow] = useState<Date | null>(null)
+  const [shortcut, setShortcut] = useState("Ctrl K")
+
+  useEffect(() => {
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) setShortcut("⌘ K")
+  }, [])
 
   useEffect(() => {
     setNow(new Date())
@@ -11,40 +17,52 @@ export function HeaderBar({ uptime }: { uptime: string }) {
     return () => clearInterval(id)
   }, [])
 
-  const time = now
-    ? now.toLocaleTimeString("en-US", { hour12: false })
-    : "--:--:--"
+  const time = now ? now.toLocaleTimeString("en-GB", { hour12: false }) : "--:--:--"
   const date = now
-    ? now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    ? now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
     : ""
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
-      <div className="flex items-center gap-3">
-        {/* The mark carries its own shape and transparent background, so it sits
-            bare rather than inside the filled chip the generic glyph needed. */}
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      <div className="flex items-center gap-4">
+        {/* The mark carries its own shape and transparent background, so it sits bare. */}
         <img
           src="/logo.png"
           alt=""
           aria-hidden="true"
-          width={40}
-          height={40}
-          className="size-10 shrink-0"
+          width={48}
+          height={48}
+          className="size-12 shrink-0"
         />
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">mulderserver</h1>
-          <div className="mt-0.5 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-status-online/15 px-2 py-0.5 text-xs font-medium text-status-online">
-              <span className="size-1.5 rounded-full bg-status-online" aria-hidden="true" />
-              Uptime {uptime}
-            </span>
-          </div>
+          {/* The one serif on the page: the name of the machine. */}
+          <h1 className="font-display text-4xl leading-none tracking-tight text-foreground">mulderserver</h1>
+          <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+            {/* Breathing: the server is alive. It says "up", not "all is well",
+                because uptime is all this line actually knows. */}
+            <span
+              className="breathe size-1.5 rounded-full bg-status-online text-status-online"
+              aria-hidden="true"
+            />
+            Up {uptime}
+          </p>
         </div>
       </div>
 
-      <div className="text-right">
-        <p className="font-mono text-2xl font-semibold tabular-nums leading-none text-foreground">{time}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{date}</p>
+      <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:items-end">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("open-launcher"))}
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Search className="size-3.5" aria-hidden="true" />
+          Open anything
+          <kbd className="rounded border border-border px-1.5 py-0.5 text-[11px] leading-none">{shortcut}</kbd>
+        </button>
+        <div className="text-left sm:text-right">
+        <p className="text-2xl font-normal tabular-nums leading-none tracking-wide text-foreground">{time}</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">{date}</p>
+        </div>
       </div>
     </header>
   )

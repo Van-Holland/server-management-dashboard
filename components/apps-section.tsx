@@ -1,124 +1,55 @@
-import Link from "next/link"
-import {
-  ArrowUpRight,
-  Captions,
-  ChevronDown,
-  ChevronRight,
-  Clapperboard,
-  CloudDownload,
-  Disc3,
-  Download,
-  Dumbbell,
-  Film,
-  Images,
-  Music,
-  Search,
-  Share2,
-  Ticket,
-  Tv,
-  type LucideIcon,
-} from "lucide-react"
+import type { CSSProperties } from "react"
+import { ArrowUpRight, Dumbbell } from "lucide-react"
+import { Spotlight } from "@/components/spotlight"
+import { DAILY, type AppEntry } from "@/lib/apps"
 
 /**
- * The home page's apps, sorted by how often they are opened, not by what kind
- * of software they are. Redesigned 2026-10-19: the old layout grouped by type
- * (Media / Automation / Downloads) and gave Prowlarr the same big tile as
- * Jellyfin, so rarely-opened tools sat on top of the things used every day.
+ * "Your apps": the apps used every day, as big tiles that are all logo. The
+ * description line was dropped on purpose (2026-10-19): a name and a recognisable
+ * mark say enough, and the freed space is what lets the logos be large. The
+ * description still shows in the tooltip and in the Cmd+K launcher.
  *
- *  - Your apps (the big tiles, renamed from "Every day" 2026-10-19). Only apps you
- *    USE live here; Media library and Backups are things you CHECK and sit under Server. Which apps are "every day" is a judgement about this
- *    household's habits, not something the code can know; change DAILY to move one.
- *  - Tools: closed by default, plain links with a few words each. They still work, they
- *    just stop competing for the top of the page.
+ * Only apps you USE live here; Media library and Backups are things you CHECK and
+ * sit under Server. The list itself is in lib/apps.ts.
  */
-
-// Tailscale IP:port for each service. Raw IP:port, no per-app hostnames
-// (deliberate, see instructions.md). If a service ever needs HTTPS, give that
-// tile its own full `href`.
-const TS_IP = "100.69.6.89"
-
-type Tile = {
-  name: string
-  description: string
-  /** External apps open in a new tab; an internal page (starts with "/") does not. */
-  href: string
-  icon: LucideIcon
-  /** The icon's own colour, so each daily app is recognisable without reading. */
-  tint: string
-}
-
-const DAILY: Tile[] = [
-  { name: "Jellyfin", description: "Watch films and shows", href: `http://${TS_IP}:8096`, icon: Clapperboard, tint: "bg-[#6d4fd8]" },
-  { name: "Jellyseerr", description: "Request something new", href: `http://${TS_IP}:5055`, icon: Ticket, tint: "bg-[#2f7de1]" },
-  { name: "Immich", description: "Photos and videos", href: `http://${TS_IP}:2283`, icon: Images, tint: "bg-[#d4537e]" },
-  { name: "Navidrome", description: "Music", href: `http://${TS_IP}:4533`, icon: Music, tint: "bg-[#1d9e75]" },
-  // Plain IP:port (2026-10-19): with Tailscale DNS on, the phone lost its internet,
-  // so the app also answers on 3011. The HTTPS name on :8443 still works, but only
-  // the IP address works with Tailscale DNS switched off.
-  { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, icon: Dumbbell, tint: "bg-[#ba7517]" },
-]
-
-type Tool = { name: string; description: string; href: string; icon: LucideIcon }
-type ToolGroup = { title: string; tools: Tool[] }
-
-const TOOLS: ToolGroup[] = [
-  {
-    // "Arr stack" is Matthijs's name for Sonarr, Radarr, Lidarr, Bazarr and Prowlarr.
-    title: "Arr stack",
-    tools: [
-      { name: "Sonarr", description: "TV shows", href: `http://${TS_IP}:8989`, icon: Tv },
-      { name: "Radarr", description: "Films", href: `http://${TS_IP}:7878`, icon: Film },
-      { name: "Lidarr", description: "Music", href: `http://${TS_IP}:8686`, icon: Disc3 },
-      { name: "Bazarr", description: "Subtitles", href: `http://${TS_IP}:6767`, icon: Captions },
-      { name: "Prowlarr", description: "Search sources", href: `http://${TS_IP}:9696`, icon: Search },
-    ],
-  },
-  {
-    title: "Downloaders",
-    tools: [
-      { name: "qBittorrent", description: "Torrent downloads", href: `http://${TS_IP}:8080`, icon: Download },
-      { name: "SABnzbd", description: "Usenet downloads", href: `http://${TS_IP}:8081`, icon: CloudDownload },
-      // slskd's web UI is published by gluetun, not by slskd's own compose: it
-      // shares gluetun's network namespace. Port 5030 all the same.
-      { name: "slskd", description: "Music downloads", href: `http://${TS_IP}:5030`, icon: Share2 },
-    ],
-  },
-]
 
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
-function DailyTile({ tile }: { tile: Tile }) {
-  const Icon = tile.icon
-  const internal = tile.href.startsWith("/")
-  const className = `group flex flex-col gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-brand ${focusRing}`
-  const body = (
-    <>
-      <span className={`flex size-12 items-center justify-center rounded-xl text-white ${tile.tint}`}>
-        <Icon className="size-6" aria-hidden="true" />
-      </span>
-      <div>
-        <div className="flex items-center gap-1">
-          <p className="text-base font-medium text-foreground">{tile.name}</p>
-          {!internal && (
-            <ArrowUpRight
-              className="size-3.5 text-brand opacity-0 transition-opacity group-hover:opacity-100"
-              aria-hidden="true"
-            />
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground">{tile.description}</p>
-      </div>
-    </>
-  )
+function DailyTile({ app, index }: { app: AppEntry; index: number }) {
+  return (
+    <a
+      href={app.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={app.description}
+      style={{ "--tint": app.tint, "--i": index } as CSSProperties}
+      className={`tile panel enter group relative flex min-h-[9.5rem] flex-col justify-between overflow-hidden rounded-[22px] p-4 sm:min-h-[11.5rem] sm:p-5 ${focusRing}`}
+    >
+      <Spotlight />
 
-  return internal ? (
-    <Link href={tile.href} className={className}>
-      {body}
-    </Link>
-  ) : (
-    <a href={tile.href} target="_blank" rel="noopener noreferrer" className={className}>
-      {body}
+      {/* A pane of glass for the mark to sit on. */}
+      <span className="relative flex size-16 items-center justify-center rounded-[20px] bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,240,220,0.07),inset_0_0_0_1px_rgba(255,240,220,0.04)] sm:size-[4.75rem]">
+        {app.logo ? (
+          <img
+            src={`/logos/${app.logo}.svg`}
+            alt=""
+            width={44}
+            height={44}
+            className="logo-img size-9 object-contain sm:size-11"
+          />
+        ) : (
+          <Dumbbell className="logo-img size-8 sm:size-10" style={{ color: app.tint }} aria-hidden="true" />
+        )}
+      </span>
+
+      <div className="relative flex items-end justify-between gap-2">
+        <p className="text-base font-medium tracking-tight text-foreground sm:text-lg">{app.name}</p>
+        <ArrowUpRight
+          className="mb-1 size-4 shrink-0 text-brand opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden="true"
+        />
+      </div>
     </a>
   )
 }
@@ -130,57 +61,10 @@ export function DailyApps() {
         Your apps
       </h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
-        {DAILY.map((tile) => (
-          <DailyTile key={tile.name} tile={tile} />
+        {DAILY.map((app, index) => (
+          <DailyTile key={app.name} app={app} index={index} />
         ))}
       </div>
     </section>
-  )
-}
-
-/**
- * Closed by default. Built on <details>, like the Media page's disclosure, so it
- * needs no client JavaScript and the browser handles keyboard and toggling.
- * Two icons swapped with `group-open:` rather than one rotated: `rotate-90` does
- * not take effect in this project (see app/media history).
- */
-export function ToolsSection() {
-  return (
-    <details className="group">
-      <summary
-        className={`flex cursor-pointer list-none items-center gap-2 rounded-lg py-1 text-sm text-muted-foreground transition-colors hover:text-foreground ${focusRing} [&::-webkit-details-marker]:hidden`}
-      >
-        <ChevronRight className="size-4 group-open:hidden" aria-hidden="true" />
-        <ChevronDown className="hidden size-4 group-open:block" aria-hidden="true" />
-        <span className="font-medium">Tools</span>
-      </summary>
-
-      <div className="mt-3 grid gap-x-10 gap-y-5 sm:grid-cols-[repeat(2,minmax(0,22rem))]">
-        {TOOLS.map((group) => (
-          <div key={group.title}>
-            <p className="mb-1 text-xs text-muted-foreground">{group.title}</p>
-            <ul>
-              {group.tools.map((tool) => {
-                const Icon = tool.icon
-                return (
-                  <li key={tool.name}>
-                    <a
-                      href={tool.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex items-center gap-3 rounded-lg px-2 py-2 text-sm text-foreground transition-colors hover:bg-secondary ${focusRing}`}
-                    >
-                      <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                      {tool.name}
-                      <span className="ml-auto text-xs text-muted-foreground">{tool.description}</span>
-                    </a>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </details>
   )
 }

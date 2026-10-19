@@ -34,7 +34,7 @@ export function ProgressBar({
       aria-label={label}
     >
       <div
-        className={`h-full rounded-full transition-all ${color}`}
+        className={`bar-fill h-full rounded-full transition-all ${color}`}
         style={{ width: `${clamped}%` }}
       />
     </div>

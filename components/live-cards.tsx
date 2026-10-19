@@ -102,7 +102,7 @@ function CardShell({
   children: React.ReactNode
 }) {
   return (
-    <div className={`h-full rounded-xl border border-border bg-card p-5 sm:p-6 ${className ?? ""}`}>
+    <div className={`panel h-full rounded-2xl p-5 sm:p-6 ${className ?? ""}`}>
       <div className="flex items-center gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
           <Icon className="size-5" aria-hidden="true" />
@@ -140,7 +140,7 @@ function DiskCard({
 }) {
   const pct = Math.min(100, Math.round((disk.usedGb / disk.totalGb) * 100))
   return (
-    <div className="h-full rounded-xl border border-border bg-card p-5 sm:p-6 lg:col-span-2">
+    <div className="panel h-full rounded-2xl p-5 sm:p-6 lg:col-span-2">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
@@ -466,26 +466,74 @@ function DownloadsCard({ downloads }: { downloads: DownloadsSnapshot | null }) {
  * speedtest, the download queue, fan and battery) still exist; they live behind
  * "All server details" so they stop taking the top of the page.
  */
+/** How many 2-second samples a sparkline remembers: about a minute. */
+const HISTORY_LENGTH = 30
+
+type History = { cpu: number[]; rx: number[]; dl: number[] }
+
+function pushSample(list: number[], value: number | undefined): number[] {
+  if (value === undefined) return list
+  return [...list, value].slice(-HISTORY_LENGTH)
+}
+
+/**
+ * A tiny line of the last minute. Scaled to its own highest value but never below
+ * `floor`, so a quiet machine draws a low flat line instead of exaggerating noise.
+ * Colour is a CSS colour token string, so one component serves every cell.
+ */
+function Sparkline({ values, floor, stroke, label }: { values: number[]; floor: number; stroke: string; label: string }) {
+  const max = Math.max(floor, ...values)
+  const points =
+    values.length < 2
+      ? "0,23 100,23"
+      : values
+          .map((v, i) => `${((i * 100) / (values.length - 1)).toFixed(1)},${(23 - (v / max) * 20).toFixed(1)}`)
+          .join(" ")
+  return (
+    <svg viewBox="0 0 100 26" preserveAspectRatio="none" className="h-6 w-full" role="img" aria-label={label}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
 function SummaryCell({
   label,
   value,
   pct,
   color,
   valueClass = "text-foreground",
+  index,
+  spark,
 }: {
   label: string
   value: string
-  pct: number | null
+  pct?: number | null
   color?: string
   valueClass?: string
+  /** Position in the entrance sequence (apps come first, then these). */
+  index: number
+  /** A sparkline shown instead of a bar. */
+  spark?: React.ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 text-sm font-medium tabular-nums sm:truncate ${valueClass}`}>{value}</p>
-      {/* Fixed height so cells without a bar (network) line up with the others. */}
-      <div className="mt-2 h-1.5">
-        {pct !== null && <ProgressBar pct={pct} label={`${label} level`} color={color} size="sm" />}
+      {/* Fixed height so every cell lines up, whatever it shows underneath. */}
+      <div className="mt-2 flex h-6 items-end">
+        {spark ?? (pct !== null && pct !== undefined && (
+          <div className="w-full pb-0.5">
+            <ProgressBar pct={pct} label={`${label} level`} color={color} size="sm" />
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -496,11 +544,13 @@ function ServerSummary({
   ssd,
   hdd,
   data,
+  history,
 }: {
   cpu: number
   ssd: DiskStats
   hdd: DiskStats
   data: LiveData
+  history: History
 }) {
   const percent = (disk: DiskStats) => (disk.totalGb > 0 ? Math.round((100 * disk.usedGb) / disk.totalGb) : 0)
   const ssdPct = percent(ssd)
@@ -511,45 +561,57 @@ function ServerSummary({
   const onBattery = data.sensors?.power.onAc === false
   const systemValue = onBattery
     ? "On battery, mains lost"
-    : `${cpu}% CPU${cpuTemp === null ? "" : ` · ${cpuTemp}°C`}`
+    : `${cpu}% CPU${cpuTemp === null ? "" : `, ${cpuTemp}°C`}`
   const systemHot = onBattery || (cpuTemp !== null && cpuTemp >= 80)
 
   const network = data.rates?.network ?? null
   const downloads = data.downloads
   const active = downloads?.items ?? []
-  const averageProgress =
-    active.length > 0 ? active.reduce((sum, item) => sum + item.progress, 0) / active.length : null
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       <SummaryCell
+        index={5}
         label="System"
         value={systemValue}
-        pct={cpu}
-        color={usageColor(cpu)}
         valueClass={systemHot ? "text-usage-high" : "text-foreground"}
+        spark={
+          <Sparkline
+            values={history.cpu}
+            floor={10}
+            label="CPU load over the last minute"
+            stroke={cpu > 85 ? "var(--usage-high)" : cpu >= 60 ? "var(--usage-mid)" : "var(--usage-low)"}
+          />
+        }
       />
       <SummaryCell
+        index={6}
         label="Storage"
-        value={`HDD ${hddPct}% · SSD ${ssdPct}%`}
+        value={`HDD ${hddPct}%, SSD ${ssdPct}%`}
         pct={fullest}
         color={usageColor(fullest)}
       />
       <SummaryCell
+        index={7}
         label="Network"
         value={network ? `${formatSpeed(network.rxBytesPerSec)} down` : "—"}
-        pct={null}
+        spark={
+          <Sparkline values={history.rx} floor={100_000} label="Download speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
+        }
       />
       <SummaryCell
+        index={8}
         label="Downloads"
         value={
           downloads === null
             ? "—"
             : active.length === 0
               ? "Idle"
-              : `${active.length} active · ${formatSpeed(downloads.totalBytesPerSec)}`
+              : `${active.length} active, ${formatSpeed(downloads.totalBytesPerSec)}`
         }
-        pct={averageProgress}
+        spark={
+          <Sparkline values={history.dl} floor={1_000_000} label="Download queue speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
+        }
       />
     </div>
   )
@@ -568,6 +630,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
   // Open swaps the slim summary row for the full cards. Showing both would print
   // every number twice.
   const [expanded, setExpanded] = useState(false)
+  const [history, setHistory] = useState<History>({ cpu: [], rx: [], dl: [] })
   const inFlight = useRef(false)
 
   useEffect(() => {
@@ -583,7 +646,14 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
         const response = await fetch("/api/live", { cache: "no-store" })
         if (!response.ok) return
         const next = (await response.json()) as LiveData
-        if (!cancelled) setData(next)
+        if (!cancelled) {
+          setData(next)
+          setHistory((h) => ({
+            cpu: pushSample(h.cpu, next.rates?.cpu),
+            rx: pushSample(h.rx, next.rates?.network.rxBytesPerSec),
+            dl: pushSample(h.dl, next.downloads?.totalBytesPerSec),
+          }))
+        }
       } catch {
         // Transient failure — keep the last good numbers on screen and let the
         // next tick correct them.
@@ -672,11 +742,16 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
         </button>
       </div>
 
-      <div id="server-details">
-        {expanded ? (
-          // Six columns so the five cards divide into a tidy grid at desktop width;
-          // System spans two rows on the right.
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+      {/* Both are always in the page. Opening slides the summary away and the full
+          cards in, so nothing jumps; `inert` keeps the hidden one out of tab order. */}
+      <div className="disclosure" data-open={!expanded} inert={expanded}>
+        <div>
+          <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} history={history} />
+        </div>
+      </div>
+      <div id="server-details" className="disclosure" data-open={expanded} inert={!expanded}>
+        <div>
+          <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <DiskCard
               label="SSD"
               disk={ssd}
@@ -704,9 +779,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
             />
             <DownloadsCard downloads={data.downloads} />
           </div>
-        ) : (
-          <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} />
-        )}
+        </div>
       </div>
       {children}
     </section>
