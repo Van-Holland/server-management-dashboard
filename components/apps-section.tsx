@@ -26,7 +26,7 @@ import {
  * (Media / Automation / Downloads) and gave Prowlarr the same big tile as
  * Jellyfin, so rarely-opened tools sat on top of the things used every day.
  *
- *  - Every day: big tiles. Which apps are "every day" is a judgement about this
+ *  - Your apps (the big tiles, renamed from "Every day" 2026-10-19). Which apps are "every day" is a judgement about this
  *    household's habits, not something the code can know; change DAILY to move one.
  *  - Behind the scenes: closed by default, plain links. They still work, they
  *    just stop competing for the top of the page.
@@ -127,7 +127,7 @@ export function DailyApps() {
   return (
     <section aria-labelledby="daily-heading">
       <h2 id="daily-heading" className="mb-3 text-sm font-medium text-muted-foreground">
-        Every day
+        Your apps
       </h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {DAILY.map((tile) => (
