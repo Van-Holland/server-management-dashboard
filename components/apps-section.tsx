@@ -14,7 +14,6 @@ import {
   Music,
   Disc3,
   Share2,
-  Wallet,
   Dumbbell,
   ArrowUpRight,
   type LucideIcon,
@@ -36,12 +35,9 @@ type Group = {
 // `docker ps` on mulderserver. Raw IP:port, no per-app hostnames — deliberate
 // choice, same as the rest of the homelab (see instructions.md).
 //
-// ONE EXCEPTION, added 2026-09-05: Actual Budget cannot use this and carries its
-// own full URL below. It needs SharedArrayBuffer, which browsers only expose in
-// a secure context, so plain http://IP:port kills the app at startup. It is
-// served over HTTPS by `tailscale serve` instead. If a second service ever
-// needs this, stop special-casing and give every tile a full `href`.
-// (2026-10-18: the Fitness Tracker was a second one; since 2026-10-19 it is back on plain IP:port, so only Actual Budget carries a full URL.)
+// Actual Budget (2026-09-05 to 2026-10-19) was the one tile that needed a full HTTPS URL, because
+// it needs SharedArrayBuffer, which only works in a secure context. It was removed, so every tile is
+// plain http://IP:port again. If a service ever needs HTTPS, give that tile its own full `href`.
 const TS_IP = "100.69.6.89"
 
 const groups: Group[] = [
@@ -72,20 +68,6 @@ const groups: Group[] = [
       // shares gluetun's network namespace. Port 5030 all the same.
       { name: "slskd", description: "Soulseek client", href: `http://${TS_IP}:5030`, icon: Share2 },
       { name: "Jellyseerr", description: "Media requests", href: `http://${TS_IP}:5055`, icon: Ticket },
-    ],
-  },
-  {
-    title: "Finance",
-    apps: [
-      // Full HTTPS URL on purpose — NOT `http://${TS_IP}:5006`. See the note on
-      // TS_IP above: on plain HTTP this app fails to start entirely. Still
-      // tailnet-only; `tailscale serve` terminates TLS on the tailnet.
-      {
-        name: "Actual Budget",
-        description: "Personal finance",
-        href: "https://mulderserver.taild9b5b8.ts.net",
-        icon: Wallet,
-      },
     ],
   },
   {
