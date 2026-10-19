@@ -41,8 +41,7 @@ type Group = {
 // a secure context, so plain http://IP:port kills the app at startup. It is
 // served over HTTPS by `tailscale serve` instead. If a second service ever
 // needs this, stop special-casing and give every tile a full `href`.
-// (2026-10-18: the Fitness Tracker is the second one, so now two tiles carry a full URL.
-// Still not worth rewriting the rest: say so if a third one turns up.)
+// (2026-10-18: the Fitness Tracker was a second one; since 2026-10-19 it is back on plain IP:port, so only Actual Budget carries a full URL.)
 const TS_IP = "100.69.6.89"
 
 const groups: Group[] = [
@@ -92,12 +91,13 @@ const groups: Group[] = [
   {
     title: "Training",
     apps: [
-      // Full HTTPS URL on purpose, like Actual Budget: the Fitness Tracker is installed on the
-      // phone as a home-screen app, which needs HTTPS. `tailscale serve` on port 8443 → 127.0.0.1:3010.
+      // Plain IP:port like the rest (2026-10-19): with Tailscale DNS on, the phone lost its internet,
+      // so the app now also answers on 3011. The HTTPS name (https://mulderserver.taild9b5b8.ts.net:8443)
+      // still works, but only the IP address works with Tailscale DNS switched off.
       {
         name: "Fitness Tracker",
         description: "Training log",
-        href: "https://mulderserver.taild9b5b8.ts.net:8443",
+        href: `http://${TS_IP}:3011`,
         icon: Dumbbell,
       },
     ],
