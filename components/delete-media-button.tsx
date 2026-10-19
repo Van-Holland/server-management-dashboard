@@ -124,7 +124,9 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
         // `text-left` is not cosmetic padding: season buttons live in a
         // `text-right` table cell and the dialog inherits that alignment,
         // which rendered the whole dialog right-aligned.
-        className="max-w-md rounded-xl border border-border bg-card p-0 text-left text-foreground backdrop:bg-black/60"
+        // `m-auto`: Tailwind's reset zeroes the dialog's default margin, which
+        // is what centres it, so without this it sits in the top-left corner.
+        className="m-auto max-w-md rounded-xl border border-border bg-card p-0 text-left text-foreground backdrop:bg-black/60"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5">
@@ -145,7 +147,7 @@ export function DeleteMediaButton({ target, title, detail, removesEntry, size = 
             )}
             <li>
               Files move to <span className="font-mono">/downloads/.recyclebin</span> and stay
-              recoverable until the next cleanup — the Recycle bin panel on this page shows exactly
+              recoverable until the next cleanup — the Recycle bin button on this page shows exactly
               how long each one has left.
             </li>
             <li>Jellyfin is told automatically by {target.kind === "movie" ? "Radarr" : "Sonarr"}.</li>
