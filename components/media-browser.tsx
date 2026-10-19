@@ -356,29 +356,29 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
   // Titles with no file at all are hidden by default, so the grid shows what can
   // actually be watched. This switches to showing ONLY those.
   const [onlyEmpty, setOnlyEmpty] = useState(false)
-  const [onlyMissing, setOnlyMissing] = useState(false)
   const [sort, setSort] = useState<SortKey>("az")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
-  const missingTitles = groups.filter((g) => g.missingCount > 0).length
-  const emptyTitles = groups.filter((g) => g.files.length === 0).length
+  // Counted inside the current Kids view, so the number on the button is the
+  // number of tiles you will actually get when you press it.
+  const emptyTitles = groups.filter((g) => g.files.length === 0 && g.kids === onlyKids).length
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = groups.filter(
       (g) =>
         (kind === "all" || g.kind === kind) &&
-        (!onlyKids || g.kids) &&
+        // Kids' titles stay out of the normal view; the Kids button swaps to them.
+        g.kids === onlyKids &&
         (onlyEmpty ? g.files.length === 0 : g.files.length > 0) &&
-        (!onlyMissing || g.missingCount > 0) &&
         (q === "" || g.title.toLowerCase().includes(q)),
     )
     if (sort === "size") list.sort((a, b) => b.totalBytes - a.totalBytes || a.title.localeCompare(b.title))
     else if (sort === "bitrate") list.sort((a, b) => lowestBitrate(a) - lowestBitrate(b) || a.title.localeCompare(b.title))
     else list.sort((a, b) => a.title.localeCompare(b.title))
     return list
-  }, [groups, query, kind, onlyKids, onlyEmpty, onlyMissing, sort])
+  }, [groups, query, kind, onlyKids, onlyEmpty, sort])
 
   // After a delete the server re-renders without the title; the panel must
   // close rather than keep showing something that no longer exists.
@@ -432,7 +432,9 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
         ))}
 
         {/* Same look as All / TV / Films, but a toggle that combines with them:
-            Kids + Films shows kids' films only. Click again to switch off. */}
+            Kids + Films shows kids' films only. Click again to switch off.
+            Kids' titles are hidden from the normal view, so this is the only
+            way to see them. */}
         <button
           type="button"
           aria-pressed={onlyKids}
@@ -444,9 +446,6 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
 
         <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
 
-        <button type="button" onClick={() => setOnlyMissing((v) => !v)} className={chip(onlyMissing)}>
-          Missing · {missingTitles}
-        </button>
         <button type="button" onClick={() => setOnlyEmpty((v) => !v)} className={chip(onlyEmpty)}>
           Not downloaded · {emptyTitles}
         </button>
