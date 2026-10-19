@@ -40,6 +40,21 @@ const PROWLARR_URL = process.env.PROWLARR_URL ?? "http://192.168.178.241:9696"
  */
 const INDEXER_DOWN_AFTER_MS = 60 * 60 * 1000
 
+/**
+ * The VPN's forwarded port is renewed about every ten minutes and the renewal
+ * fails often: on 2026-10-19 it dropped and came back 11 times in 3 hours, each
+ * time within ~20 seconds, while torrents carried on. A banner that flashes red
+ * for 20 seconds teaches you to ignore it, so a qBittorrent problem is only
+ * reported once it has lasted this long. The real outage of 2026-10-15 lasted
+ * four days; two minutes costs nothing against that.
+ *
+ * The clock needs memory between page loads, so a small watcher polls qBittorrent
+ * in the background and remembers since when it has looked wrong. The env knobs
+ * exist so the behaviour can be tested in seconds rather than minutes.
+ */
+const QBIT_GRACE_MS = Number(process.env.HEALTH_QBIT_GRACE_MS ?? 120_000)
+const QBIT_POLL_MS = Number(process.env.HEALTH_QBIT_POLL_MS ?? 30_000)
+
 type QbitPrefs = { listen_port?: number; current_network_interface?: string }
 type QbitTransfer = { connection_status?: string }
 
@@ -168,7 +183,35 @@ async function checkProwlarr(): Promise<HealthWarning[]> {
   }
 }
 
+type QbitWatch = { warnings: HealthWarning[]; badSince: number | null; started: boolean }
+
+// On globalThis so a hot reload in development cannot start a second timer.
+const globalWatch = globalThis as typeof globalThis & { __qbitWatch?: QbitWatch }
+const qbitWatch: QbitWatch = (globalWatch.__qbitWatch ??= { warnings: [], badSince: null, started: false })
+
+async function pollQbit(): Promise<void> {
+  const warnings = await checkQbit()
+  qbitWatch.warnings = warnings
+  if (warnings.length === 0) qbitWatch.badSince = null
+  else if (qbitWatch.badSince === null) qbitWatch.badSince = Date.now()
+}
+
+function ensureQbitWatcher(): void {
+  if (qbitWatch.started) return
+  qbitWatch.started = true
+  void pollQbit()
+  // unref(): the timer must never be the thing that keeps the server process alive.
+  setInterval(() => void pollQbit(), QBIT_POLL_MS).unref()
+}
+
+function qbitWarningsPastGrace(): HealthWarning[] {
+  if (qbitWatch.badSince === null) return []
+  return Date.now() - qbitWatch.badSince >= QBIT_GRACE_MS ? qbitWatch.warnings : []
+}
+
 export async function getHealthWarnings(): Promise<HealthWarning[]> {
-  const [qbit, prowlarr] = await Promise.all([checkQbit(), checkProwlarr()])
-  return [...qbit, ...prowlarr]
+  ensureQbitWatcher()
+  // Until the watcher's first poll lands (right after a restart) there is nothing
+  // to report; the first real answer arrives within a few seconds.
+  return [...qbitWarningsPastGrace(), ...(await checkProwlarr())]
 }
