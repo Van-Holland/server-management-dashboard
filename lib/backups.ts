@@ -610,8 +610,10 @@ async function timeMachine(): Promise<BackupLeg> {
 
   const age = hoursSince(lastRunMs)
   // Deliberately generous: the MacBook is portable, so a gap usually means it
-  // was away from the network, not that backups are broken.
-  let verdict = judge(age, 12, 72)
+  // was away from the network, not that backups are broken. Late after a full day
+  // (was 12 hours until 2026-10-19, which made every morning after a night of
+  // sleep read as "late" and turned the home page's backup line permanently orange).
+  let verdict = judge(age, 24, 72)
   if (lastRunMs === null) verdict = "unknown"
 
   if (!note) {

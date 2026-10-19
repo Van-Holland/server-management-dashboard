@@ -623,3 +623,30 @@ export async function getMedia(): Promise<MediaSnapshot> {
 // Pure formatters live in their own file so client components can import them
 // without dragging this module's node:fs import into the browser bundle.
 export { formatBytes, formatMbps, formatRuntime } from "./media-format"
+
+export type MediaSummary = { shows: number; films: number; bytes: number }
+
+/**
+ * Three numbers for the home page: how many shows and films, and how much space
+ * they take. Deliberately NOT getMedia(): that walks every episode of every show
+ * (dozens of requests) and the home page must stay quick. Sonarr and Radarr both
+ * report `sizeOnDisk` in their plain list endpoints, so two requests are enough.
+ * Returns null when either app cannot be read; the card then just says "Browse".
+ */
+export async function getMediaSummary(): Promise<MediaSummary | null> {
+  const sonarrKey = process.env.SONARR_API_KEY
+  const radarrKey = process.env.RADARR_API_KEY
+  if (!sonarrKey || !radarrKey) return null
+  try {
+    const [series, movies] = await Promise.all([
+      api<{ statistics?: { sizeOnDisk?: number } }[]>(env("SONARR_URL", "http://192.168.178.241:8989"), sonarrKey, "/api/v3/series"),
+      api<{ sizeOnDisk?: number }[]>(env("RADARR_URL", "http://192.168.178.241:7878"), radarrKey, "/api/v3/movie"),
+    ])
+    const bytes =
+      series.reduce((n, s) => n + (s.statistics?.sizeOnDisk ?? 0), 0) +
+      movies.reduce((n, m) => n + (m.sizeOnDisk ?? 0), 0)
+    return { shows: series.length, films: movies.length, bytes }
+  } catch {
+    return null
+  }
+}

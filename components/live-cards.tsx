@@ -555,7 +555,7 @@ function ServerSummary({
   )
 }
 
-export function LiveCards({ initial }: { initial: InitialStats }) {
+export function LiveCards({ initial, children }: { initial: InitialStats; children?: React.ReactNode }) {
   const [data, setData] = useState<LiveData>({
     rates: null,
     capacity: null,
@@ -708,6 +708,7 @@ export function LiveCards({ initial }: { initial: InitialStats }) {
           <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} />
         )}
       </div>
+      {children}
     </section>
   )
 }

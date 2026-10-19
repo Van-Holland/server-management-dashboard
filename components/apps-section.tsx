@@ -11,7 +11,6 @@ import {
   Dumbbell,
   Film,
   Images,
-  LayoutGrid,
   Music,
   Search,
   Share2,
@@ -26,7 +25,8 @@ import {
  * (Media / Automation / Downloads) and gave Prowlarr the same big tile as
  * Jellyfin, so rarely-opened tools sat on top of the things used every day.
  *
- *  - Your apps (the big tiles, renamed from "Every day" 2026-10-19). Which apps are "every day" is a judgement about this
+ *  - Your apps (the big tiles, renamed from "Every day" 2026-10-19). Only apps you
+ *    USE live here; Media library and Backups are things you CHECK and sit under Server. Which apps are "every day" is a judgement about this
  *    household's habits, not something the code can know; change DAILY to move one.
  *  - Behind the scenes: closed by default, plain links. They still work, they
  *    just stop competing for the top of the page.
@@ -56,7 +56,6 @@ const DAILY: Tile[] = [
   // so the app also answers on 3011. The HTTPS name on :8443 still works, but only
   // the IP address works with Tailscale DNS switched off.
   { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, icon: Dumbbell, tint: "bg-[#ba7517]" },
-  { name: "Media library", description: "What is on the server", href: "/media", icon: LayoutGrid, tint: "bg-[#4b4b53]" },
 ]
 
 type Tool = { name: string; href: string; icon: LucideIcon }
@@ -129,7 +128,7 @@ export function DailyApps() {
       <h2 id="daily-heading" className="mb-3 text-sm font-medium text-muted-foreground">
         Your apps
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
         {DAILY.map((tile) => (
           <DailyTile key={tile.name} tile={tile} />
         ))}
