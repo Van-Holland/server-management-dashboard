@@ -9,6 +9,7 @@ import {
   BatteryWarning,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Cpu,
   Database,
   Download,
@@ -564,6 +565,9 @@ export function LiveCards({ initial }: { initial: InitialStats }) {
   })
   const [notice, setNotice] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState<number | null>(null)
+  // Open swaps the slim summary row for the full cards. Showing both would print
+  // every number twice.
+  const [expanded, setExpanded] = useState(false)
   const inFlight = useRef(false)
 
   useEffect(() => {
@@ -641,49 +645,69 @@ export function LiveCards({ initial }: { initial: InitialStats }) {
 
   return (
     <section aria-labelledby="server-heading">
-      <h2 id="server-heading" className="mb-3 text-sm font-medium text-muted-foreground">
-        Server
-      </h2>
-      <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} />
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 id="server-heading" className="text-sm font-medium text-muted-foreground">
+          Server
+        </h2>
+        {/* Stays in the same place in both states, so it does not jump when the
+            content below changes. */}
+        <button
+          type="button"
+          onClick={() => setExpanded((open) => !open)}
+          aria-expanded={expanded}
+          aria-controls="server-details"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {expanded ? (
+            <>
+              Show less
+              <ChevronUp className="size-4" aria-hidden="true" />
+            </>
+          ) : (
+            <>
+              All details
+              <ChevronDown className="size-4" aria-hidden="true" />
+            </>
+          )}
+        </button>
+      </div>
 
-      <details className="group mt-3">
-        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="size-4 group-open:hidden" aria-hidden="true" />
-          <ChevronDown className="hidden size-4 group-open:block" aria-hidden="true" />
-          All server details
-        </summary>
-
-        {/* Six columns so the five cards divide into a tidy grid at desktop width;
-            System spans two rows on the right. */}
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          <DiskCard
-            label="SSD"
-            disk={ssd}
-            io={data.rates?.diskIo.ssd ?? null}
-            tempC={data.sensors?.ssdTempC ?? null}
-            icon={HardDrive}
-          />
-          <DiskCard
-            label="HDD"
-            disk={hdd}
-            io={data.rates?.diskIo.hdd ?? null}
-            tempC={null}
-            icon={Database}
-            // Only the 8TB gets this — it holds the media library. The SSD holds
-            // configs and databases, which /media has nothing to say about.
-            link={{ href: "/media", label: "Media" }}
-          />
-          <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
-          <NetworkCard
-            network={data.rates?.network ?? null}
-            speedtest={data.speedtest}
-            onRunSpeedtest={runSpeedtest}
-            running={running}
-            notice={notice ?? (data.speedtest?.error ? `Last test failed: ${data.speedtest.error}` : null)}
-          />
-          <DownloadsCard downloads={data.downloads} />
-        </div>
-      </details>
+      <div id="server-details">
+        {expanded ? (
+          // Six columns so the five cards divide into a tidy grid at desktop width;
+          // System spans two rows on the right.
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            <DiskCard
+              label="SSD"
+              disk={ssd}
+              io={data.rates?.diskIo.ssd ?? null}
+              tempC={data.sensors?.ssdTempC ?? null}
+              icon={HardDrive}
+            />
+            <DiskCard
+              label="HDD"
+              disk={hdd}
+              io={data.rates?.diskIo.hdd ?? null}
+              tempC={null}
+              icon={Database}
+              // Only the 8TB gets this — it holds the media library. The SSD holds
+              // configs and databases, which /media has nothing to say about.
+              link={{ href: "/media", label: "Media" }}
+            />
+            <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
+            <NetworkCard
+              network={data.rates?.network ?? null}
+              speedtest={data.speedtest}
+              onRunSpeedtest={runSpeedtest}
+              running={running}
+              notice={notice ?? (data.speedtest?.error ? `Last test failed: ${data.speedtest.error}` : null)}
+            />
+            <DownloadsCard downloads={data.downloads} />
+          </div>
+        ) : (
+          <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} />
+        )}
+      </div>
     </section>
   )
 }
