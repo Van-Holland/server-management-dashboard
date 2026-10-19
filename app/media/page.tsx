@@ -2,6 +2,8 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { formatBytes, getMedia } from "@/lib/media"
 import { MediaBrowser } from "@/components/media-browser"
+import { HealthBanner } from "@/components/health-banner"
+import { getHealthWarnings } from "@/lib/health"
 import { RecycleBinButton } from "@/components/recycle-bin-button"
 import { getRecycleBin, timeLeft, type RecycleBinSnapshot } from "@/lib/recycle-bin"
 
@@ -98,7 +100,7 @@ function RecycleBinTable({ bin, nowMs }: { bin: RecycleBinSnapshot; nowMs: numbe
 }
 
 export default async function MediaPage() {
-  const [snapshot, bin] = await Promise.all([getMedia(), getRecycleBin()])
+  const [snapshot, bin, warnings] = await Promise.all([getMedia(), getRecycleBin(), getHealthWarnings()])
 
   const seriesCount = snapshot.groups.filter((g) => g.kind === "series").length
   const movieCount = snapshot.groups.filter((g) => g.kind === "movie").length
@@ -161,6 +163,9 @@ export default async function MediaPage() {
             </ul>
           </div>
         )}
+
+        {/* A title that never arrives is usually this, so it sits above the grid. */}
+        <HealthBanner warnings={warnings} />
 
         <MediaBrowser groups={snapshot.groups} />
       </div>
