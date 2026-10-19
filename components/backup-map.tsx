@@ -44,9 +44,11 @@ const THINGS: Thing[] = [
   {
     name: "Photos",
     about: "The Immich library",
-    livesOn: "Server",
+    // /mnt/storage8tb/photos: the 8TB drive IS where the photos live, so it is also
+    // the only copy in the house. Checked against immich's UPLOAD_LOCATION 2026-10-19.
+    livesOn: "8TB drive",
     inTheHouse: null,
-    noHouseCopy: "only on the server",
+    noHouseCopy: "only on the 8TB drive",
     outside: { legId: "immich-to-proton", where: "Proton Drive" },
   },
   {
@@ -59,15 +61,15 @@ const THINGS: Thing[] = [
   {
     name: "Tenant files",
     about: "Van Holland Property Management",
-    livesOn: "Server",
+    livesOn: "Server SSD",
     inTheHouse: null,
-    noHouseCopy: "only on the server",
+    noHouseCopy: "only on the server SSD",
     outside: { legId: "vanholland-to-proton", where: "Proton Drive" },
   },
   {
     name: "Fitness data",
     about: "Workouts and weigh-ins",
-    livesOn: "Server",
+    livesOn: "Server SSD",
     inTheHouse: { legId: "fitness-to-proton", where: "8TB drive" },
     outside: { legId: "fitness-to-proton", where: "Proton Drive" },
   },
