@@ -193,21 +193,37 @@
   box-shadow: inset 0 1px 0 oklch(0.97 0.02 80 / 6%);
 }
 
-/* App tile: the border takes the app's own colour on hover, and a soft light in
-   that colour follows the cursor (see components/spotlight.tsx). */
-.tile {
+/* An app icon, phone home-screen style: the pane floats up and glows in the app's
+   own colour on hover or keyboard focus. --tint is set on the link. */
+.app {
   --tint: var(--brand);
-  transition: border-color 0.3s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.tile:hover {
+.app-icon {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 oklch(0.97 0.02 80 / 8%), 0 10px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.3s ease, box-shadow 0.35s ease;
+}
+.app:hover .app-icon,
+.app:focus-visible .app-icon {
+  transform: translateY(-5px) scale(1.04);
   border-color: color-mix(in srgb, var(--tint) 55%, transparent);
-  transform: translateY(-4px);
+  box-shadow: inset 0 1px 0 oklch(0.97 0.02 80 / 10%), 0 16px 34px color-mix(in srgb, var(--tint) 26%, transparent);
 }
-.tile .logo-img {
+.app .logo-img {
   transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.tile:hover .logo-img {
-  transform: translateY(-3px) scale(1.1);
+.app:hover .logo-img,
+.app:focus-visible .logo-img {
+  transform: scale(1.08);
+}
+.app-name {
+  color: color-mix(in oklab, var(--foreground) 82%, transparent);
+  transition: color 0.3s ease;
+}
+.app:hover .app-name,
+.app:focus-visible .app-name {
+  color: var(--foreground);
 }
 
 /* The one entrance: parts of the page settle in one after another. Each element
@@ -306,7 +322,7 @@
 }
 
 /* The light behind the page. Nearly off until you hover an app, then it takes that
-   app's colour (set by components/spotlight.tsx). It answers the cursor, so it is
+   app's colour (set by components/ambient-trigger.tsx). It answers the cursor, so it is
    not decoration. z-index -1 puts it above the page background and below content. */
 .ambient {
   position: fixed;
@@ -389,12 +405,15 @@ dialog.launcher[open] {
   .ambient {
     transition: none;
   }
-  .tile,
-  .tile .logo-img {
+  .app-icon,
+  .app .logo-img,
+  .app-name {
     transition: none;
   }
-  .tile:hover,
-  .tile:hover .logo-img {
+  .app:hover .app-icon,
+  .app:focus-visible .app-icon,
+  .app:hover .logo-img,
+  .app:focus-visible .logo-img {
     transform: none;
   }
 }
