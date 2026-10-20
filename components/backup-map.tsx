@@ -121,7 +121,7 @@ const IF_GONE: Record<string, string[]> = {
   "vault-to-github": ["If Claude is gone: give any AI access to the Second Brain folder and tell it to read README.md."],
   "server-config": [
     "Every night at 04:30 the server packs its app settings, API keys, scripts and job list into one file. One copy goes to the 8TB drive and one to Proton Drive. The last 14 are kept. Movies, music and photos are not in it. They have their own backups.",
-    "If the server dies: install Ubuntu on a new machine, give an AI SSH access, and tell it to follow the rebuild plan in the Second Brain, folder IT/Projects/Linux Home Server.",
+    "If the server dies: install Ubuntu on a new machine, give an AI SSH access, and tell it to read REBUILD.md in the Second Brain, folder IT/Projects/Linux Home Server.",
   ],
 }
 
