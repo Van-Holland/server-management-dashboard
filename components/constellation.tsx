@@ -107,12 +107,13 @@ export function Constellation() {
       ctx.translate(w / 2, h / 2)
       ctx.scale(1, 0.55)
       const haze = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(w, h) * 0.55)
-      haze.addColorStop(0, `rgba(${BLUE}, 0.035)`)
+      haze.addColorStop(0, `rgba(${BLUE}, 0.085)`)
+      haze.addColorStop(0.45, `rgba(${BLUE}, 0.045)`)
       haze.addColorStop(1, `rgba(${BLUE}, 0)`)
       ctx.fillStyle = haze
       ctx.fillRect(-w, -h * 2, w * 2, h * 4)
       ctx.restore()
-      ctx.lineWidth = 0.5
+      ctx.lineWidth = 0.7
       // Each linking star reaches for its (up to) 3 nearest linking neighbours; a pair
       // is drawn once however many stars pick it.
       const drawn = new Set<number>()
@@ -130,7 +131,7 @@ export function Constellation() {
           const key = i < j ? i * 1000 + j : j * 1000 + i
           if (drawn.has(key)) continue
           drawn.add(key)
-          ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.6 * 0.13})`
+          ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.4 * 0.3})`
           ctx.beginPath()
           ctx.moveTo(s.x, s.y)
           ctx.lineTo(stars[j].x, stars[j].y)
