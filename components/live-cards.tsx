@@ -1,14 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import Link from "next/link"
 import {
   Activity,
   ArrowDown,
   ArrowUp,
   BatteryWarning,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Cpu,
   Database,
@@ -123,20 +121,12 @@ function DiskCard({
   io,
   tempC,
   icon: Icon,
-  link,
 }: {
   label: string
   disk: DiskStats
   io: DiskIo | null
   tempC: number | null
   icon: LucideIcon
-  /**
-   * Optional link out to a detail page. Deliberately a small button rather than
-   * making the whole card clickable: this card's job is still disk usage, and
-   * wrapping it in an anchor would turn every stray click on the capacity bar
-   * into a navigation.
-   */
-  link?: { href: string; label: string }
 }) {
   const pct = Math.min(100, Math.round((disk.usedGb / disk.totalGb) * 100))
   return (
@@ -184,15 +174,6 @@ function DiskCard({
         )}
       </div>
 
-      {link && (
-        <Link
-          href={link.href}
-          className="mt-4 inline-flex items-center gap-1 rounded-lg bg-secondary px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
-        >
-          {link.label}
-          <ChevronRight className="size-3.5" aria-hidden="true" />
-        </Link>
-      )}
     </div>
   )
 }
@@ -765,9 +746,6 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
               io={data.rates?.diskIo.hdd ?? null}
               tempC={null}
               icon={Database}
-              // Only the 8TB gets this — it holds the media library. The SSD holds
-              // configs and databases, which /media has nothing to say about.
-              link={{ href: "/media", label: "Media" }}
             />
             <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
             <NetworkCard

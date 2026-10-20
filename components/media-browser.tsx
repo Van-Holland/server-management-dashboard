@@ -82,7 +82,7 @@ function Poster({ group }: { group: MediaGroup }) {
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
-    <span className={`rounded-md px-1.5 py-0.5 text-[0.7rem] font-medium leading-none ${className}`}>
+    <span className={`rounded px-1 py-0.5 text-[0.55rem] font-medium leading-none sm:rounded-md sm:px-1.5 sm:text-[0.7rem] ${className}`}>
       {children}
     </span>
   )
@@ -98,19 +98,19 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="group overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40"
+      className="group overflow-hidden rounded-lg border sm:rounded-xl border-border bg-card text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40"
     >
       <div className="relative aspect-[2/3] bg-secondary">
         <div className={`h-full w-full ${empty ? "opacity-40" : ""}`}>
           <Poster group={group} />
         </div>
         {quality && (
-          <span className="absolute left-2 top-2">
+          <span className="absolute left-1 top-1 sm:left-2 sm:top-2">
             <Badge className="bg-black/70 text-white">{quality}</Badge>
           </span>
         )}
         {(thin > 0 || group.missingCount > 0 || group.upcomingCount > 0) && (
-          <span className="absolute bottom-2 left-2 flex flex-col items-start gap-1">
+          <span className="absolute bottom-1 left-1 flex sm:bottom-2 sm:left-2 flex-col items-start gap-1">
             {thin > 0 && (
               <Badge className="bg-usage-mid text-black">{isSeries ? `${thin} thin` : "thin"}</Badge>
             )}
@@ -127,9 +127,9 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
           </span>
         )}
       </div>
-      <div className="px-2.5 py-2">
-        <p className="truncate text-sm font-medium text-foreground">{group.title}</p>
-        <p className="truncate text-xs text-muted-foreground">
+      <div className="px-1.5 py-1.5 sm:px-2.5 sm:py-2">
+        <p className="truncate text-[0.65rem] font-medium sm:text-sm text-foreground">{group.title}</p>
+        <p className="hidden truncate text-xs text-muted-foreground sm:block">
           {empty
             ? group.missingCount === 0 && group.upcomingCount > 0
               ? "Not out yet"
@@ -467,7 +467,7 @@ export function MediaBrowser({ groups }: { groups: MediaGroup[] }) {
       {shown.length === 0 ? (
         <p className="mt-10 text-center text-sm text-muted-foreground">Nothing matches.</p>
       ) : (
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {shown.map((g) => (
             <Tile key={g.id} group={g} onOpen={() => setSelectedId(g.id)} />
           ))}

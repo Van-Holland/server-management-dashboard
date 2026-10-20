@@ -11,7 +11,7 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 const instrumentSerif = Instrument_Serif({ subsets: ['latin'], weight: '400', variable: '--font-display-serif' })
 
 export const metadata: Metadata = {
-  title: 'Homelab — Server Dashboard',
+  title: 'Mulderserver',
   description: 'Monitor storage usage and launch your self-hosted apps',
   generator: 'v0.app',
   // The mulderserver mark. Orange on transparent reads on both light and dark
