@@ -4,7 +4,6 @@ import { DailyApps } from "@/components/apps-section"
 import { ToolsSection } from "@/components/tools-section"
 import { ServerPages } from "@/components/server-pages"
 import { HealthBanner } from "@/components/health-banner"
-import { MaintenanceNote } from "@/components/maintenance-note"
 import { getBackups } from "@/lib/backups"
 import { getHardware } from "@/lib/hardware"
 import { getHealthSnapshot } from "@/lib/health"
@@ -27,9 +26,9 @@ export default async function HomePage() {
     getMediaSummary(),
   ])
 
-  // Two levels: red needs action today, maintenance needs action this week. A failed or overdue backup is a red one.
+  // Two levels: red needs action today (the box below), maintenance needs action this week (the Health card and page, since 2026-10-20). A failed or overdue backup is a red one.
   const lists = splitWarnings(snapshot, backups)
-  const { alerts, maintenance } = lists
+  const { alerts } = lists
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
@@ -37,7 +36,6 @@ export default async function HomePage() {
         <HeaderBar uptime={stats.uptime} />
         {/* Empty unless torrents or an indexer are silently broken. */}
         <HealthBanner warnings={alerts} />
-        <MaintenanceNote items={maintenance} />
         {/* Ordered by how often each part is used: the apps first, then how the
             server is doing, then the tools (the arr stack and the downloaders). */}
         <DailyApps />
