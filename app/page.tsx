@@ -27,7 +27,7 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-8 sm:gap-10">
         <HeaderBar uptime={stats.uptime} />
         {/* Empty unless torrents or an indexer are silently broken. */}
         <HealthBanner warnings={warnings} />

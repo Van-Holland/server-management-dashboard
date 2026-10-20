@@ -58,9 +58,13 @@ export function DailyApps() {
       <h2 id="daily-heading" className="mb-3 text-sm font-medium text-muted-foreground">
         Your apps
       </h2>
-      <div className="grid grid-cols-3 justify-items-center gap-x-2 gap-y-7 sm:grid-cols-5 sm:gap-x-4">
+      {/* Phone: three per row, the last short row centred (5 apps would otherwise leave
+          a lopsided gap on the right). */}
+      <div className="flex flex-wrap justify-center gap-x-2 gap-y-7 sm:grid sm:grid-cols-5 sm:justify-items-center sm:gap-x-4">
         {DAILY.map((app, index) => (
-          <DailyTile key={app.name} app={app} index={index} />
+          <div key={app.name} className="flex w-[calc((100%-1rem)/3)] justify-center sm:w-auto">
+            <DailyTile app={app} index={index} />
+          </div>
         ))}
       </div>
     </section>

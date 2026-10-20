@@ -58,6 +58,35 @@ function airDate(ms: number | null): string | null {
   })
 }
 
+/** "12 Dec", with the year when it is not this year. Server timezone, like airDate. */
+function shortDate(ms: number): string {
+  const d = new Date(ms)
+  const opts = { timeZone: "Europe/Amsterdam" } as const
+  const sameYear =
+    d.toLocaleDateString("en-GB", { ...opts, year: "numeric" }) ===
+    new Date().toLocaleDateString("en-GB", { ...opts, year: "numeric" })
+  return d.toLocaleDateString("en-GB", { ...opts, day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) })
+}
+
+/** Short badge text: a sure date as-is, an estimate with ~, nothing known as TBA. */
+function expectedBadge(e: NonNullable<MediaGroup["expected"]>): string {
+  if (e.ms === null) return "TBA"
+  return e.kind === "estimate" ? `~${shortDate(e.ms)}` : shortDate(e.ms)
+}
+
+/** Full sentence for the subtitle and the detail dialog. */
+function expectedText(e: NonNullable<MediaGroup["expected"]>): string {
+  if (e.ms === null) return "Release date not known yet"
+  const d = shortDate(e.ms)
+  switch (e.kind) {
+    case "digital": return `Digital release ${d}`
+    case "physical": return `Disc release ${d}`
+    case "estimate": return `Estimated ${d}`
+    case "airs": return `Next episode ${d}`
+    default: return d
+  }
+}
+
 function Poster({ group }: { group: MediaGroup }) {
   const [failed, setFailed] = useState(false)
   const Icon = group.kind === "series" ? Tv : Film
@@ -121,7 +150,11 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
             )}
             {group.upcomingCount > 0 && (
               <Badge className="bg-black/70 text-white">
-                {isSeries && !empty ? `${group.upcomingCount} coming` : "coming"}
+                {isSeries && !empty
+                  ? `${group.upcomingCount} coming`
+                  : group.expected
+                    ? expectedBadge(group.expected)
+                    : "coming"}
               </Badge>
             )}
           </span>
@@ -132,7 +165,9 @@ function Tile({ group, onOpen }: { group: MediaGroup; onOpen: () => void }) {
         <p className="hidden truncate text-xs text-muted-foreground sm:block">
           {empty
             ? group.missingCount === 0 && group.upcomingCount > 0
-              ? "Not out yet"
+              ? group.expected
+                ? expectedText(group.expected)
+                : "Not out yet"
               : "Not downloaded"
             : isSeries
               ? `${group.files.length} ep · ${formatBytes(group.totalBytes)}`
@@ -312,6 +347,7 @@ function DetailPanel({ group, onClose }: { group: MediaGroup; onClose: () => voi
               <span>
                 {" "}
                 · {group.kind === "movie" ? "not out yet" : `${group.upcomingCount} not aired yet`}
+                {group.expected && ` · ${expectedText(group.expected)}`}
               </span>
             )}
           </p>

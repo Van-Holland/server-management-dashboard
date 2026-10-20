@@ -507,7 +507,7 @@ function SummaryCell({
   return (
     <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-sm font-medium tabular-nums sm:truncate ${valueClass}`}>{value}</p>
+      <p className={`mt-1 truncate whitespace-nowrap text-[13px] font-medium tabular-nums sm:text-sm ${valueClass}`}>{value}</p>
       {/* Fixed height so every cell lines up, whatever it shows underneath. */}
       <div className="mt-2 flex h-6 items-end">
         {spark ?? (pct !== null && pct !== undefined && (

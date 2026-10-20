@@ -138,6 +138,14 @@ export type MediaGroup = {
   missingCount: number
   /** Monitored, no file, not out yet. Shown quietly, never as a warning. */
   upcomingCount: number
+  /**
+   * When a proper copy is expected, for titles not out yet. Films: Radarr's
+   * digital date, else physical, else cinema date + 90 days (the same estimate
+   * Radarr itself uses to decide a film is available), else unknown. Shows: the
+   * air date of the earliest episode that has not aired. Null when nothing is
+   * upcoming.
+   */
+  expected?: { ms: number | null; kind: "digital" | "physical" | "estimate" | "airs" | "unknown" } | null
   /** Every monitored episode without a file, aired or not, for the detail table. */
   missingEpisodes: MissingEpisode[]
 }
@@ -453,6 +461,7 @@ async function loadSonarr(
           totalBytes: files.reduce((n, f) => n + f.sizeBytes, 0),
           missingCount: missingEpisodes.filter((m) => m.aired).length,
           upcomingCount: missingEpisodes.filter((m) => !m.aired).length,
+          expected: nextAirDate(missingEpisodes),
           missingEpisodes,
         })
       }
@@ -464,6 +473,28 @@ async function loadSonarr(
   return { groups, rules }
 }
 
+const DAY_MS = 86_400_000
+
+/** Earliest air date among episodes that have not aired; null when none is upcoming. */
+function nextAirDate(missing: MissingEpisode[]): MediaGroup["expected"] {
+  const upcoming = missing.filter((m) => !m.aired)
+  if (upcoming.length === 0) return null
+  const dates = upcoming.map((m) => m.airDateMs).filter((d): d is number => d !== null)
+  return dates.length > 0 ? { ms: Math.min(...dates), kind: "airs" } : { ms: null, kind: "unknown" }
+}
+
+/** A film is usable once it is on digital or disc; cinema + 90 days is Radarr's own fallback guess. */
+function movieExpected(m: { inCinemas?: string; digitalRelease?: string; physicalRelease?: string }): MediaGroup["expected"] {
+  const parse = (d?: string) => (d ? Date.parse(d) : Number.NaN)
+  const digital = parse(m.digitalRelease)
+  if (Number.isFinite(digital)) return { ms: digital, kind: "digital" }
+  const physical = parse(m.physicalRelease)
+  if (Number.isFinite(physical)) return { ms: physical, kind: "physical" }
+  const cinema = parse(m.inCinemas)
+  if (Number.isFinite(cinema)) return { ms: cinema + 90 * DAY_MS, kind: "estimate" }
+  return { ms: null, kind: "unknown" }
+}
+
 type RadarrMovie = {
   id: number
   title: string
@@ -472,6 +503,9 @@ type RadarrMovie = {
   hasFile: boolean
   /** Radarr's own "is it out yet" flag. Absent is treated as out. */
   isAvailable?: boolean
+  inCinemas?: string
+  digitalRelease?: string
+  physicalRelease?: string
   rootFolderPath?: string
   qualityProfileId: number
   movieFile?: {
@@ -532,6 +566,7 @@ async function loadRadarr(state: SweepState, errors: string[]): Promise<{ groups
           // that it is simply upcoming (Radarr's isAvailable decides which).
           missingCount: m.monitored && m.isAvailable !== false ? 1 : 0,
           upcomingCount: m.monitored && m.isAvailable === false ? 1 : 0,
+          expected: m.monitored && m.isAvailable === false ? movieExpected(m) : null,
           missingEpisodes: [],
         })
         continue
