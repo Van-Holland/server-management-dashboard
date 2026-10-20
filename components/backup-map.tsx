@@ -120,8 +120,11 @@ const THINGS: Thing[] = [
 const IF_GONE: Record<string, string[]> = {
   "vault-to-github": ["If Claude is gone: give any AI access to the Second Brain folder and tell it to read README.md."],
   "server-config": [
-    "Every night at 04:30 the server packs its app settings, API keys, scripts and job list into one file. One copy goes to the 8TB drive and one to Proton Drive. The last 14 are kept. Movies, music and photos are not in it. They have their own backups.",
-    "If the server dies: install Ubuntu on a new machine, give an AI SSH access, and tell it to read REBUILD.md in the Second Brain, folder IT/Projects/Linux Home Server.",
+    "What it is||Everything needed to rebuild Mulderserver exactly as it is now: the settings and API keys of every app, the scripts, the job list, and the logins for file sharing, Tailscale and the websites. Movies, music and photos are not in it. They have their own backups.",
+    "How it runs||Every night at 04:30 the server packs all of this into one file. One copy goes to the 8TB drive and one to Proton Drive. The last 14 are kept. A new service you install is included automatically. This page shows whether the last run worked.",
+    "How it stays true||Whenever you run /checkup, it compares the live server with the saved snapshot and with REBUILD.md. It tells you if a new service, a changed setting or an old copy needs attention. It never changes anything by itself.",
+    "What REBUILD.md is||A step-by-step book in the Second Brain that explains how to build this server again from nothing. The backup holds the contents, the book holds the instructions. The first part tells you what to do by hand: install Ubuntu, plug in the drive. The second part is for an AI: install Docker, restore the backup, start every app and check that it works.",
+    "If the server dies||Install Ubuntu on a new machine, give an AI SSH access, and tell it to read REBUILD.md in the Second Brain, folder IT/Projects/Linux Home Server. It follows the book step by step, and you only do the few things an AI cannot. The full rebuild has not been tested yet.",
   ],
 }
 
@@ -463,11 +466,16 @@ export function JobList({ legs }: { legs: BackupLeg[] }) {
 
               <div className="px-4 pb-4 pl-11 text-sm">
                 {/* The old one-line description of each job is gone: the tiles above already say what is protected. */}
-                {IF_GONE[leg.id]?.map((paragraph, i) => (
-                  <p key={i} className={`text-foreground/80 ${i > 0 ? "mt-2" : ""}`}>
-                    {paragraph}
-                  </p>
-                ))}
+                {IF_GONE[leg.id]?.map((paragraph, i) => {
+                  // "Label||text": a short bold label in front of the paragraph.
+                  const [label, body] = paragraph.includes("||") ? paragraph.split("||") : [null, paragraph]
+                  return (
+                    <p key={i} className={`text-foreground/80 ${i > 0 ? "mt-2.5" : ""}`}>
+                      {label && <span className="font-medium text-foreground">{label}. </span>}
+                      {body}
+                    </p>
+                  )
+                })}
                 <dl className={`${IF_GONE[leg.id] ? "mt-3" : ""} grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3`}>
                   <div>
                     <dt className="text-muted-foreground">Status</dt>
