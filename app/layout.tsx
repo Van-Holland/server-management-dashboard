@@ -8,7 +8,7 @@ import { Launcher } from '@/components/launcher'
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 // The machine name in the header only; everything else stays Geist.
-const rethinkSans = Rethink_Sans({ subsets: ['latin'], weight: ['500'], variable: '--font-name' })
+const rethinkSans = Rethink_Sans({ subsets: ['latin'], weight: ['400'], variable: '--font-name' })
 
 export const metadata: Metadata = {
   title: 'Mulderserver',

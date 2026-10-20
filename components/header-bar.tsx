@@ -34,7 +34,7 @@ export function HeaderBar({ uptime }: { uptime: string }) {
             tooltip and in the System card, not in a second line here. */}
         <h1
           className="truncate text-2xl leading-none tracking-tight text-foreground"
-          style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 500 }}
+          style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 400 }}
         >
           Mulderserver
         </h1>
