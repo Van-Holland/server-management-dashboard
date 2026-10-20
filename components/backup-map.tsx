@@ -98,8 +98,8 @@ const THINGS: Thing[] = [
   },
   {
     // The rebuild kit. Both copies come from one job (04:30). Rebuild plan step 5/6.
-    name: "The server itself",
-    about: "App settings, API keys, scripts and the job list: what a new server needs to come back the same",
+    name: "Mulderserver",
+    about: "Everything needed to rebuild the server exactly how it is now on new hardware fully automatic with AI.",
     livesOn: "Server SSD",
     inTheHouse: { legId: "server-config", where: "8TB drive" },
     outside: { legId: "server-config", where: "Proton Drive" },

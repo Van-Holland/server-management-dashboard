@@ -509,7 +509,7 @@ async function serverConfigBackup(): Promise<BackupLeg> {
 
   return {
     id: "server-config",
-    name: "Server settings → 8TB drive and Proton Drive",
+    name: "Mulderserver → 8TB drive and Proton Drive",
     protects: "App settings, API keys, scripts and the job list: what a rebuilt server needs",
     destination: "HDD: backups/server/mulderserver-config · protondrive:3. Backup/Mulderserver Config",
     offsite: true,
