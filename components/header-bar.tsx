@@ -18,51 +18,64 @@ export function HeaderBar({ uptime }: { uptime: string }) {
   }, [])
 
   const time = now ? now.toLocaleTimeString("en-GB", { hour12: false }) : "--:--:--"
+  const shortTime = time.slice(0, 5)
   const date = now
     ? now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
     : ""
+  const shortDate = now
+    ? now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
+    : ""
+
+  const openLauncher = () => window.dispatchEvent(new Event("open-launcher"))
 
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-      <div className="flex items-center gap-4">
-        {/* The mark carries its own shape and transparent background, so it sits bare. */}
+    <header className="flex items-center justify-between gap-4">
+      {/* The mark and the two text lines share one height (h-11), centred on each
+          other, so the mark is no longer taller than the name beside it. */}
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
         <img
           src="/logo.png"
           alt=""
           aria-hidden="true"
-          width={48}
-          height={48}
-          className="size-12 shrink-0"
+          width={44}
+          height={44}
+          className="size-11 shrink-0 sm:size-12"
         />
-        <div>
-          {/* The one serif on the page: the name of the machine. */}
-          <h1 className="font-display text-4xl leading-none tracking-tight text-foreground">mulderserver</h1>
-          <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold leading-none tracking-tight text-foreground sm:text-3xl">
+            Mulderserver
+          </h1>
+          <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground sm:text-sm">
             {/* Breathing: the server is alive. It says "up", not "all is well",
                 because uptime is all this line actually knows. */}
             <span
-              className="breathe size-1.5 rounded-full bg-status-online text-status-online"
+              className="breathe size-1.5 shrink-0 rounded-full bg-status-online text-status-online"
               aria-hidden="true"
             />
-            Up {uptime}
+            <span className="truncate">
+              Up {uptime}
+              {/* Phone: the clock moves up here so the right side is just the search button. */}
+              <span className="sm:hidden tabular-nums"> · {shortDate}, {shortTime}</span>
+            </span>
           </p>
         </div>
       </div>
 
-      <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:items-end">
+      <div className="flex shrink-0 items-center gap-5">
+        <div className="hidden text-right sm:block">
+          <p className="text-xl font-normal tabular-nums leading-none tracking-wide text-foreground">{time}</p>
+          <p className="mt-1.5 text-sm leading-none text-muted-foreground">{date}</p>
+        </div>
         <button
           type="button"
-          onClick={() => window.dispatchEvent(new Event("open-launcher"))}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={openLauncher}
+          aria-label="Open anything"
+          className="inline-flex size-11 items-center justify-center gap-2 rounded-xl border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto sm:rounded-lg sm:px-3 sm:text-sm"
         >
-          <Search className="size-3.5" aria-hidden="true" />
-          Open anything
-          <kbd className="rounded border border-border px-1.5 py-0.5 text-[11px] leading-none">{shortcut}</kbd>
+          <Search className="size-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Open anything</span>
+          <kbd className="hidden rounded border border-border px-1.5 py-0.5 text-[11px] leading-none sm:inline">{shortcut}</kbd>
         </button>
-        <div className="text-left sm:text-right">
-        <p className="text-2xl font-normal tabular-nums leading-none tracking-wide text-foreground">{time}</p>
-        <p className="mt-1.5 text-sm text-muted-foreground">{date}</p>
-        </div>
       </div>
     </header>
   )

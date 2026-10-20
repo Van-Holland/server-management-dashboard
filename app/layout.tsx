@@ -1,14 +1,12 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google'
+import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AmbientGlow } from '@/components/ambient-glow'
 import { Launcher } from '@/components/launcher'
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
-// The "mulderserver" wordmark only. Downloaded at build time and served from this server.
-const instrumentSerif = Instrument_Serif({ subsets: ['latin'], weight: '400', variable: '--font-display-serif' })
 
 export const metadata: Metadata = {
   title: 'Mulderserver',
@@ -37,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}>
+    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
       <body className="bg-background font-sans antialiased">
         <AmbientGlow />
         {children}
