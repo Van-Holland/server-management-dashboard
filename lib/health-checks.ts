@@ -79,7 +79,10 @@ const CATALOGUE: Entry[] = [
     fix: "If it does not recover by itself: restart gluetun, then qbittorrent and slskd (Linux Home Server hard rule 9).",
     match: starts("qbit-"),
     has: (c) => !!c.s.qbit?.reachable,
-    ok: (c) => `qBittorrent listens on port ${c.s.qbit?.port} through the VPN (${c.s.qbit?.iface})`,
+    ok: (c) =>
+      c.s.qbit?.port === 0 || c.s.qbit?.iface === "lo"
+        ? "No port at this moment. Short drops are normal; it turns red after 10 minutes"
+        : `qBittorrent listens on port ${c.s.qbit?.port} through the VPN (${c.s.qbit?.iface})`,
   },
   {
     id: "vpn-watchdog",
