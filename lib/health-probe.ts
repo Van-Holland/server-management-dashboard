@@ -39,7 +39,18 @@ export type ProbeStatus = {
   vpn: { exitIp: string | null; checked: boolean; leak: boolean }
   apps: Named[]
   sites: Named[]
-  containers: { running?: number; unhealthy: string[]; restarting: string[] }
+  containers: {
+    running?: number
+    unhealthy: string[]
+    restarting: string[]
+    stopped?: { name: string; status: string }[]
+    all?: { name: string; state: "running" | "stopped" | "restarting" | "unhealthy" }[]
+  }
+  hddMounted?: boolean
+  resources?: { ramPct: number | null; ramHighSinceIso: string | null; load15: number; cpus: number; loadHighSinceIso: string | null; maxTempC: number | null }
+  jobs?: { name: string; ok: boolean; ageMin: number | null; maxMin: number }[]
+  imageUpdates?: { checkedAtIso: string | null; items: { container: string; image: string; upToDate: boolean | null }[] }
+  immich?: { current: string | null; latest: string | null }
   disks: Record<string, { usedPct: number; mount: string }>
   battery: { onBattery: boolean; sinceIso: string | null }
   arr: Record<string, ArrItem[] | null>
@@ -112,6 +123,19 @@ export function evaluateProbe(p: ProbeStatus, nowMs: number): HealthWarning[] {
     }
   }
 
+  // A container that is not running at all is invisible to "unhealthy" and "restarting": that is how soularr sat stopped for 8 days.
+  for (const c of p.containers.stopped ?? []) {
+    out.push(
+      alert(
+        `stopped-${c.name}`,
+        `${c.name} is not running`,
+        `Docker says: ${c.status}. It should be running. Start it with docker start ${c.name} (qbittorrent and slskd: read Linux Home Server hard rule 9 first), or tell Claude it is meant to stay stopped.`,
+      ),
+    )
+  }
+  if (p.hddMounted === false) {
+    out.push(alert("hdd-missing", "The 8TB drive is not mounted", "Media, photos and the in-house backups are out of reach. Check the USB cable and the drive's power, then mount it (REBUILD.md R4)."))
+  }
   for (const c of p.containers.unhealthy) out.push(alert(`unhealthy-${c}`, `${c} reports itself unhealthy`, "Docker's own health check is failing for this container."))
   for (const c of p.containers.restarting) out.push(alert(`restarting-${c}`, `${c} keeps restarting`, "The container starts and stops again and again. Look at its logs."))
 
@@ -120,6 +144,27 @@ export function evaluateProbe(p: ProbeStatus, nowMs: number): HealthWarning[] {
     if (!d) continue
     if (d.usedPct >= 90) out.push(alert(`disk-${key}`, `${label} is almost full (${d.usedPct}%)`, "Free up space before it is full: new downloads and backups will start to fail."))
     else if (d.usedPct >= 80) out.push(maint(`disk-${key}`, `${label} is ${d.usedPct}% full`, "Plan to free up space."))
+  }
+
+  // memory, load and temperature only matter when they STAY high
+  const r = p.resources
+  if (r) {
+    const ramMs = r.ramHighSinceIso ? Date.parse(r.ramHighSinceIso) : Number.NaN
+    if (Number.isFinite(ramMs) && nowMs - ramMs >= 10 * 60 * 1000) {
+      out.push(alert("ram-high", `Memory is almost full (${r.ramPct}%)`, `Over 90% for ${Math.round((nowMs - ramMs) / 60000)} minutes. Apps may start being killed. Look for a container using too much.`))
+    }
+    const loadMs = r.loadHighSinceIso ? Date.parse(r.loadHighSinceIso) : Number.NaN
+    if (Number.isFinite(loadMs) && nowMs - loadMs >= 30 * 60 * 1000) {
+      out.push(maint("load-high", "The server has been very busy for 30 minutes", `Load ${r.load15} on ${r.cpus} cores. Transcoding or a runaway process.`))
+    }
+    if (r.maxTempC !== null && r.maxTempC >= 85) out.push(alert("temp-high", `The server is hot (${r.maxTempC} °C)`, "Check the fan and the airflow."))
+    else if (r.maxTempC !== null && r.maxTempC >= 75) out.push(maint("temp-high", `The server is warm (${r.maxTempC} °C)`, "Keep an eye on the fan and the airflow."))
+  }
+
+  for (const j of p.jobs ?? []) {
+    if (!j.ok) {
+      out.push(alert(`job-${j.name}`, `${j.name} has not run`, j.ageMin === null ? "No sign of it at all." : `Its last sign of life was ${j.ageMin} minutes ago; it should be under ${j.maxMin}. Look at its cron job on the server.`))
+    }
   }
 
   const batSince = p.battery.sinceIso ? Date.parse(p.battery.sinceIso) : Number.NaN
@@ -140,6 +185,26 @@ export function evaluateProbe(p: ProbeStatus, nowMs: number): HealthWarning[] {
         out.push(maint(`arr-${app}-${i.message.slice(0, 24)}`, `${name} reports a warning`, i.message))
       }
     }
+  }
+
+  // Newer software: the four arr apps say so themselves (above); every other container is compared with its registry once a day.
+  const arrWithUpdate = new Set(out.filter((w) => w.id.startsWith("arr-update-")).map((w) => w.id.replace("arr-update-", "")))
+  const immichNewer = !!p.immich?.current && !!p.immich?.latest && p.immich.current !== p.immich.latest
+  if (immichNewer) {
+    out.push(maint("image-update-immich", "Immich has a new version", `Running ${p.immich!.current}, the newest is ${p.immich!.latest}. Update it from /home/matt/docker/immich: docker compose pull, then docker compose up -d. Read its release notes first.`))
+  }
+  const newer = (p.imageUpdates?.items ?? []).filter(
+    (i) => i.upToDate === false && !arrWithUpdate.has(i.container) && !(immichNewer && i.container.startsWith("immich_")),
+  )
+  if (newer.length > 0) {
+    const names = [...new Set(newer.map((i) => i.container))]
+    out.push(
+      maint(
+        "image-updates",
+        `${names.length} ${names.length === 1 ? "container has" : "containers have"} a newer version`,
+        `${names.join(", ")}. Update one at a time from its folder under /home/matt/docker (docker compose pull, then up -d). gluetun, qbittorrent and slskd: read Linux Home Server hard rule 9 first.`,
+      ),
+    )
   }
 
   for (const w of p.sab.warnings) {

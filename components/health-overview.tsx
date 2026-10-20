@@ -122,7 +122,7 @@ export function HealthOverview({ checks }: { checks: HealthCheck[] }) {
               <span className={`text-xs ${status === "ok" ? "text-muted-foreground" : TEXT[status]}`}>{groupLine(inGroup)}</span>
             </div>
             <div className="overflow-hidden rounded-xl border border-border bg-card">
-              {g.id === "apps" ? <Chips checks={inGroup} /> : [...inGroup].sort((a, b) => RANK[a.status] - RANK[b.status]).map((c) => <Row key={c.id} check={c} />)}
+              {g.id === "apps" || g.id === "containers" ? <Chips checks={inGroup} /> : [...inGroup].sort((a, b) => RANK[a.status] - RANK[b.status]).map((c) => <Row key={c.id} check={c} />)}
             </div>
           </section>
         )

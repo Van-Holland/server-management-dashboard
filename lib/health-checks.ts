@@ -14,7 +14,7 @@ import type { ProbeStatus } from "@/lib/health-probe"
  */
 
 export type CheckStatus = "ok" | "maintenance" | "alert" | "unknown"
-export type CheckGroup = "downloads" | "apps" | "server" | "connection" | "backups" | "other"
+export type CheckGroup = "downloads" | "apps" | "containers" | "server" | "connection" | "backups" | "other"
 
 export type HealthCheck = {
   id: string
@@ -32,6 +32,7 @@ export type HealthCheck = {
 export const GROUPS: { id: CheckGroup; title: string }[] = [
   { id: "downloads", title: "Downloads" },
   { id: "apps", title: "Apps and websites" },
+  { id: "containers", title: "Containers" },
   { id: "server", title: "Server" },
   { id: "connection", title: "Connection" },
   { id: "backups", title: "Backups" },
@@ -156,18 +157,6 @@ const CATALOGUE: Entry[] = [
     ok: (c) => `SABnzbd is ${String(c.p?.sab.status).toLowerCase()}, no warnings`,
   },
   {
-    id: "containers",
-    group: "server",
-    name: "Containers",
-    every: "every 5 minutes",
-    looksAt: "Docker's own view of every container: unhealthy or stuck in a restart loop.",
-    rule: "Red as soon as one is unhealthy or restarting.",
-    fix: "Look at that container's logs.",
-    match: starts("unhealthy-", "restarting-"),
-    has: (c) => !!c.p,
-    ok: (c) => `${c.p?.containers.running ?? "All"} running, none unhealthy or restarting`,
-  },
-  {
     id: "disk-ssd",
     group: "server",
     name: "Server SSD space",
@@ -184,12 +173,12 @@ const CATALOGUE: Entry[] = [
     group: "server",
     name: "8TB drive space",
     every: "every 5 minutes",
-    looksAt: "How full the big drive is (media, photos, backups).",
-    rule: "Yellow from 80% full, red from 90%.",
+    looksAt: "That the big drive (media, photos, backups) is mounted, and how full it is. A USB drive that comes loose would otherwise look like missing data.",
+    rule: "Red at once if it is not mounted. Yellow from 80% full, red from 90%.",
     fix: "Free up space, or plan the bigger storage.",
-    match: is("disk-hdd"),
-    has: (c) => !!c.p?.disks.hdd,
-    ok: (c) => `${c.p?.disks.hdd.usedPct}% full`,
+    match: is("disk-hdd", "hdd-missing"),
+    has: (c) => c.p?.hddMounted !== false && !!c.p?.disks.hdd,
+    ok: (c) => `Mounted, ${c.p?.disks.hdd.usedPct}% full`,
   },
   {
     id: "drive-hdd",
@@ -260,13 +249,49 @@ const CATALOGUE: Entry[] = [
   {
     id: "app-versions",
     group: "server",
-    name: "App versions",
+    name: "Software versions",
+    every: "every 12 hours",
+    looksAt: "Whether Immich, Sonarr, Radarr, Lidarr, Prowlarr or any other container has a newer version. The arr apps say so themselves; every other container's image is compared with its registry.",
+    rule: "Yellow when a newer version exists. Updating is a planned step, not an emergency.",
+    fix: "Update one container at a time from its folder under /home/matt/docker. Read the release notes first.",
+    match: starts("arr-update-", "image-update"),
+    has: (c) => !!c.p?.imageUpdates?.checkedAtIso,
+    ok: () => "Everything is up to date",
+  },
+  {
+    id: "memory",
+    group: "server",
+    name: "Memory",
     every: "every 5 minutes",
-    looksAt: "Whether Sonarr, Radarr, Lidarr or Prowlarr announce a new version.",
-    rule: "Yellow when a new version exists.",
-    match: starts("arr-update-"),
-    has: (c) => !!c.p,
-    ok: () => "All up to date",
+    looksAt: "How much of the server's RAM is in use.",
+    rule: "Red when it stays over 90% for 10 minutes.",
+    fix: "Find the container using too much memory.",
+    match: is("ram-high"),
+    has: (c) => !!c.p?.resources && c.p.resources.ramPct !== null,
+    ok: (c) => `${c.p?.resources?.ramPct}% in use`,
+  },
+  {
+    id: "load",
+    group: "server",
+    name: "Processor load",
+    every: "every 5 minutes",
+    looksAt: "How busy the processor has been over the last 15 minutes.",
+    rule: "Yellow when it stays far above what the cores can handle for 30 minutes.",
+    match: is("load-high"),
+    has: (c) => !!c.p?.resources,
+    ok: (c) => `Load ${c.p?.resources?.load15} on ${c.p?.resources?.cpus} cores`,
+  },
+  {
+    id: "temperature",
+    group: "server",
+    name: "Temperature",
+    every: "every 5 minutes",
+    looksAt: "The hottest temperature sensor inside the server.",
+    rule: "Yellow from 75 °C, red from 85 °C.",
+    fix: "Check the fan and the airflow.",
+    match: is("temp-high"),
+    has: (c) => c.p?.resources?.maxTempC != null,
+    ok: (c) => `At most ${c.p?.resources?.maxTempC} °C`,
   },
   {
     id: "probe-job",
@@ -333,6 +358,43 @@ export function buildChecks(s: HealthSnapshot, backups: BackupsSnapshot | null, 
         : "Whether the app answers on its port on the server.",
       rule: "Red when it has not answered for 5 minutes. A short blip is ignored.",
       fix: isSite ? "Check cloudflared and the container behind it." : "Look at the container's logs.",
+      warnings: ws,
+    })
+  }
+
+  // One chip per container, stopped ones included: a container that is not running is invisible to "unhealthy" and "restarting".
+  for (const ctr of p?.containers.all ?? []) {
+    const ws = s.warnings.filter((w) => w.id === `stopped-${ctr.name}` || w.id === `unhealthy-${ctr.name}` || w.id === `restarting-${ctr.name}`)
+    ws.forEach((w) => claimed.add(w.id))
+    checks.push({
+      id: `ctr-${ctr.name}`,
+      group: "containers",
+      name: ctr.name,
+      status: ws.length > 0 ? worst(ws) : "ok",
+      summary: ws.length > 0 ? ws[0].title : "Running",
+      every: "every 5 minutes",
+      looksAt: "Docker's own state for this container: running, stopped, restarting or unhealthy.",
+      rule: "Red as soon as it is stopped, restarting or unhealthy.",
+      fix: "Look at its logs, then start it again.",
+      warnings: ws,
+    })
+  }
+
+  // The background jobs on the server: a job that stopped leaves no error anywhere.
+  for (const j of p?.jobs ?? []) {
+    const id = `job-${j.name}`
+    const ws = s.warnings.filter((w) => w.id === id)
+    ws.forEach((w) => claimed.add(w.id))
+    checks.push({
+      id,
+      group: "downloads",
+      name: j.name,
+      status: ws.length > 0 ? worst(ws) : "ok",
+      summary: ws.length > 0 ? ws[0].title : j.ageMin === null ? "No sign yet" : `Active ${j.ageMin < 120 ? `${j.ageMin} min` : `${Math.round(j.ageMin / 60)} h`} ago`,
+      every: "every 5 minutes",
+      looksAt: "That this job is still running: its log or lock file must have been touched recently.",
+      rule: `Red when there is no sign of life for more than ${j.maxMin >= 120 ? `${Math.round(j.maxMin / 60)} hours` : `${j.maxMin} minutes`}.`,
+      fix: "Look at the job's cron entry on the server.",
       warnings: ws,
     })
   }
