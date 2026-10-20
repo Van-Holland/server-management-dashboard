@@ -27,12 +27,13 @@ import type { NetworkRates } from "@/lib/network-stats"
 import type { Sensors } from "@/lib/sensors"
 import type { SpeedtestState } from "@/lib/speedtest"
 import type { Hardware } from "@/lib/hardware"
+import type { DiskCulprits } from "@/lib/disk-culprits"
 import type { DiskStats } from "@/lib/system-stats"
 
 type Capacity = { ssd: DiskStats; hdd: DiskStats; ram: number; uptime: string }
 
 type LiveData = {
-  rates: { cpu: number; network: NetworkRates; diskIo: DiskIoRates } | null
+  rates: { cpu: number; network: NetworkRates; diskIo: DiskIoRates; hddCulprits: DiskCulprits | null } | null
   capacity: Capacity | null
   sensors: Sensors | null
   downloads: DownloadsSnapshot | null
@@ -122,12 +123,15 @@ function DiskCard({
   io,
   tempC,
   icon: Icon,
+  culprits = null,
 }: {
   label: string
   disk: DiskStats
   io: DiskIo | null
   tempC: number | null
   icon: LucideIcon
+  /** Only the 8TB drive passes this: who is using it right now. */
+  culprits?: DiskCulprits | null
 }) {
   const pct = Math.min(100, Math.round((disk.usedGb / disk.totalGb) * 100))
   return (
@@ -162,6 +166,14 @@ function DiskCard({
               R <span className="text-foreground">{formatSpeed(io.readBytesPerSec)}</span>
               <span className="px-1.5 opacity-40">·</span>W{" "}
               <span className="text-foreground">{formatSpeed(io.writeBytesPerSec)}</span>
+              {culprits !== null && (
+                <>
+                  <span className="px-1.5 opacity-40">·</span>
+                  <span title="Disk operations per second. Every one is a head movement on the drive, and that is what you hear.">
+                    <span className="text-foreground">{Math.round(io.opsPerSec)}</span> ops/s
+                  </span>
+                </>
+              )}
             </>
           ) : (
             "R — · W —"
@@ -175,6 +187,16 @@ function DiskCard({
         )}
       </div>
 
+      {/* Who is using the 8TB drive right now. It names the container or service, not what it is doing. */}
+      {culprits && !culprits.warming && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {culprits.quiet
+            ? "Now: quiet"
+            : culprits.items.length > 0
+              ? `Now: ${culprits.items.map((c) => `${c.name} (${c.opsPerSec} ops/s)`).join(", ")}`
+              : "Now: busy, from the system itself"}
+        </p>
+      )}
     </div>
   )
 }
@@ -757,6 +779,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
               io={data.rates?.diskIo.hdd ?? null}
               tempC={null}
               icon={Database}
+              culprits={data.rates?.hddCulprits ?? null}
             />
             <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} uptime={data.capacity?.uptime ?? initial.uptime} />
             <NetworkCard

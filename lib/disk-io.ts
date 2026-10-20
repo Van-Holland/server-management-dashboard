@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 
-export type DiskIo = { readBytesPerSec: number; writeBytesPerSec: number }
+export type DiskIo = { readBytesPerSec: number; writeBytesPerSec: number; opsPerSec: number }
 export type DiskIoRates = { ssd: DiskIo | null; hdd: DiskIo | null }
 
 const DISKSTATS_PATH = "/host/proc/diskstats"
@@ -17,7 +17,7 @@ const SECTORS_WRITTEN = 9
 // device's real logical block size.
 const SECTOR_BYTES = 512
 
-export type DiskSample = Map<string, { read: number; write: number }>
+export type DiskSample = Map<string, { read: number; write: number; ops: number; majMin: string }>
 
 export async function sampleDiskstats(): Promise<DiskSample> {
   const raw = await readFile(DISKSTATS_PATH, "utf-8")
@@ -29,6 +29,9 @@ export async function sampleDiskstats(): Promise<DiskSample> {
     sample.set(fields[2], {
       read: Number(fields[SECTORS_READ]) * SECTOR_BYTES,
       write: Number(fields[SECTORS_WRITTEN]) * SECTOR_BYTES,
+      // Operations, not bytes, are what makes a hard drive audible: every one is a head movement.
+      ops: Number(fields[3]) + Number(fields[7]),
+      majMin: `${fields[0]}:${fields[1]}`,
     })
   }
 
@@ -99,8 +102,15 @@ export async function diskIoRates(
     return {
       readBytesPerSec: Math.max(0, (b.read - a.read) / elapsedSeconds),
       writeBytesPerSec: Math.max(0, (b.write - a.write) / elapsedSeconds),
+      opsPerSec: Math.max(0, (b.ops - a.ops) / elapsedSeconds),
     }
   }
 
   return { ssd: rateFor(devices.ssd), hdd: rateFor(devices.hdd) }
+}
+
+/** The HDD's device number ("8:0"), which is how the cgroup io.stat files name it. */
+export async function hddMajMin(sample: DiskSample): Promise<string | null> {
+  const devices = await resolveDevices(sample)
+  return devices.hdd ? (sample.get(devices.hdd)?.majMin ?? null) : null
 }

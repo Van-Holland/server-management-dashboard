@@ -1,4 +1,5 @@
-import { diskIoRates, sampleDiskstats, type DiskIoRates } from "@/lib/disk-io"
+import { diskIoRates, hddMajMin, sampleDiskstats, type DiskIoRates } from "@/lib/disk-io"
+import { sampleCulprits, type DiskCulprits } from "@/lib/disk-culprits"
 import { networkRates, sampleNetDev, type NetworkRates } from "@/lib/network-stats"
 import { cpuRate, sampleCpu } from "@/lib/system-stats"
 
@@ -6,6 +7,8 @@ export type LiveRates = {
   cpu: number
   network: NetworkRates
   diskIo: DiskIoRates
+  /** Who is using the 8TB drive right now (null when it cannot be told). */
+  hddCulprits: DiskCulprits | null
 }
 
 // CPU %, network throughput and disk throughput are all deltas between two
@@ -29,9 +32,11 @@ export async function sampleLiveRates(): Promise<LiveRates> {
   ])
 
   const elapsedSeconds = SAMPLE_MS / 1000
+  const hddCulprits = await sampleCulprits(await hddMajMin(diskSecond)).catch(() => null)
   return {
     cpu: cpuRate(cpuFirst, cpuSecond),
     network: networkRates(netFirst, netSecond, elapsedSeconds),
     diskIo: await diskIoRates(diskFirst, diskSecond, elapsedSeconds),
+    hddCulprits,
   }
 }
