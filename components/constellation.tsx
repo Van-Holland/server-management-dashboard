@@ -19,6 +19,26 @@ type Star = { x: number; y: number; vx: number; vy: number; ox: number; oy: numb
 
 const BLUE = "128, 178, 255" // soft sky blue
 
+/** One soft star, drawn once: a bright small core fading smoothly into a blue halo. */
+function makeSprite(): HTMLCanvasElement {
+  const size = 64
+  const sprite = document.createElement("canvas")
+  sprite.width = size
+  sprite.height = size
+  const g = sprite.getContext("2d")
+  if (g) {
+    const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+    grad.addColorStop(0, "rgba(225, 238, 255, 1)")
+    grad.addColorStop(0.12, "rgba(170, 207, 255, 0.95)")
+    grad.addColorStop(0.3, `rgba(${BLUE}, 0.5)`)
+    grad.addColorStop(0.6, `rgba(${BLUE}, 0.16)`)
+    grad.addColorStop(1, `rgba(${BLUE}, 0)`)
+    g.fillStyle = grad
+    g.fillRect(0, 0, size, size)
+  }
+  return sprite
+}
+
 export function Constellation() {
   const ref = useRef<HTMLCanvasElement>(null)
 
@@ -33,6 +53,7 @@ export function Constellation() {
     const linkDist = small ? 85 : 105
     const pointerRadius = small ? 100 : 130
 
+    const sprite = makeSprite()
     let w = 0
     let h = 0
     let stars: Star[] = []
@@ -53,8 +74,9 @@ export function Constellation() {
           vy: Math.sin(angle) * speed,
           ox: 0,
           oy: 0,
-          r: big ? 1.5 + Math.random() * 0.8 : 0.6 + Math.random() * 0.8,
-          a: big ? 0.85 + Math.random() * 0.15 : 0.35 + Math.random() * 0.45,
+          // r is the visible core; the glow around it is drawn at about 7x that.
+          r: big ? 2.2 + Math.random() * 1.2 : 1.1 + Math.random() * 1.0,
+          a: big ? 0.9 + Math.random() * 0.1 : 0.5 + Math.random() * 0.4,
         }
       })
     }
@@ -77,15 +99,11 @@ export function Constellation() {
         }
       }
       for (const s of stars) {
-        // The bigger stars get a soft glow; the small ones are just dots.
-        ctx.shadowColor = `rgba(${BLUE}, 0.9)`
-        ctx.shadowBlur = s.r > 1.4 ? 8 : 0
-        ctx.fillStyle = `rgba(${BLUE}, ${s.a})`
-        ctx.beginPath()
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
-        ctx.fill()
+        const d = s.r * 7.5
+        ctx.globalAlpha = s.a
+        ctx.drawImage(sprite, s.x - d / 2, s.y - d / 2, d, d)
       }
-      ctx.shadowBlur = 0
+      ctx.globalAlpha = 1
     }
 
     const resize = () => {
