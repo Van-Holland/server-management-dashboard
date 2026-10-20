@@ -120,11 +120,9 @@ const THINGS: Thing[] = [
 const IF_GONE: Record<string, string[]> = {
   "vault-to-github": ["If Claude is gone: give any AI access to the Second Brain folder and tell it to read README.md."],
   "server-config": [
-    "What it is||Everything needed to rebuild Mulderserver exactly as it is now: the settings and API keys of every app, the scripts, the job list, and the logins for file sharing, Tailscale and the websites. Movies, music and photos are not in it. They have their own backups.",
-    "How it runs||Every night at 04:30 the server packs all of this into one file. One copy goes to the 8TB drive and one to Proton Drive. The last 14 are kept. A new service you install is included automatically. This page shows whether the last run worked.",
-    "How it stays true||Whenever you run /checkup, it compares the live server with the saved snapshot and with REBUILD.md. It tells you if a new service, a changed setting or an old copy needs attention. It never changes anything by itself.",
-    "What REBUILD.md is||A step-by-step book in the Second Brain that explains how to build this server again from nothing. The backup holds the contents, the book holds the instructions. The first part tells you what to do by hand: install Ubuntu, plug in the drive. The second part is for an AI: install Docker, restore the backup, start every app and check that it works.",
-    "If the server dies||Install Ubuntu on a new machine, give an AI SSH access, and tell it to read REBUILD.md in the Second Brain, folder IT/Projects/Linux Home Server. It follows the book step by step, and you only do the few things an AI cannot. The full rebuild has not been tested yet.",
+    "What it is||Everything needed to rebuild Mulderserver as it is now: every app’s settings and keys, the scripts, the job list and the logins. It uses REBUILD.md, an instruction book for AI to rebuild the server.",
+    "How it runs||Every night at 04:30 it is packed into one file. One copy goes to the 8TB drive, one to Proton Drive. The last 14 are kept. New services are included automatically.",
+    "How it stays true||/checkup compares the live server with the saved copy and with REBUILD.md, and tells you what is out of date. It changes nothing itself.",
   ],
 }
 
