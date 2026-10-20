@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Cloud, House, X } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Cloud, HardDrive, House, Laptop, Server, Shield, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { BackupLeg } from "@/lib/backups"
 import { formatAge, verdictStyle } from "@/components/backup-status"
@@ -105,7 +105,25 @@ const THINGS: Thing[] = [
   },
 ]
 
-const GRID = "md:grid-cols-[1.3fr_0.7fr_1.2fr_1.2fr]"
+const GRID = "md:grid-cols-[1.25fr_0.85fr_1.15fr_1.15fr]"
+
+/** A small icon for the kind of place a thing lives on. */
+function placeIcon(livesOn: string): LucideIcon {
+  if (livesOn.includes("MacBook")) return Laptop
+  if (livesOn.includes("Proton")) return Cloud
+  if (livesOn.includes("SSD")) return Server
+  return HardDrive
+}
+
+/** A column heading: small uppercase label with an icon, brighter than body text, so it reads as a label. */
+function ColumnHead({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-foreground/65">
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+      {children}
+    </span>
+  )
+}
 
 /** "Nightly, 03:00" -> "Nightly 03:00": the comma reads oddly in a small cell. */
 function shortSchedule(schedule: string): string {
@@ -282,6 +300,20 @@ function CopyLine({
   )
 }
 
+/** "Lives on" in an opened phone row, built like the two copy lines below it. */
+function LivesOnLine({ livesOn }: { livesOn: string }) {
+  const Icon = placeIcon(livesOn)
+  return (
+    <div className="flex items-start gap-3">
+      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lives on</p>
+        <p className="text-sm font-medium text-foreground">{livesOn}</p>
+      </div>
+    </div>
+  )
+}
+
 /**
  * The phone version of the map (below the md breakpoint, where the four-column row
  * cannot fit). One slim row per thing with a house badge and a cloud badge, so all
@@ -316,10 +348,8 @@ function PhoneMap({ legs }: { legs: Map<string, BackupLeg> }) {
                 <CopyPill icon={Cloud} state={outside} label="Copy outside the house" />
               </summary>
               <div className="flex flex-col gap-4 px-3.5 pb-4 pl-10">
-                <div>
-                  <p className="text-xs text-muted-foreground">{thing.about}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Lives on: {thing.livesOn}</p>
-                </div>
+                <p className="text-xs text-muted-foreground">{thing.about}</p>
+                <LivesOnLine livesOn={thing.livesOn} />
                 <CopyLine icon={House} heading="In the house" copy={thing.inTheHouse} legs={legs} emptyText={thing.noHouseCopy} />
                 <CopyLine icon={Cloud} heading="Outside the house" copy={thing.outside} legs={legs} emptyText={thing.noOutsideCopy} />
               </div>
@@ -327,6 +357,20 @@ function PhoneMap({ legs }: { legs: Map<string, BackupLeg> }) {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+/** The "Lives on" cell on desktop: a tile like the copy tiles beside it. */
+function PlaceTile({ livesOn }: { livesOn: string }) {
+  const Icon = placeIcon(livesOn)
+  return (
+    <div className="hidden rounded-xl border border-border bg-card px-3.5 py-3 md:block">
+      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {livesOn}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">Where the original is</p>
     </div>
   )
 }
@@ -344,11 +388,11 @@ export function BackupMap({ legs }: { legs: BackupLeg[] }) {
         <PhoneMap legs={byId} />
       </div>
 
-      <div className={`hidden gap-2 px-1 pb-2 text-xs text-muted-foreground md:grid ${GRID}`}>
-        <span>What we protect</span>
-        <span>Lives on</span>
-        <span>Copy in the house</span>
-        <span>Copy outside the house</span>
+      <div className={`hidden gap-2 border-b border-border px-1 pb-2.5 md:mb-3 md:grid ${GRID}`}>
+        <ColumnHead icon={Shield}>What we protect</ColumnHead>
+        <ColumnHead icon={HardDrive}>Lives on</ColumnHead>
+        <ColumnHead icon={House}>Copy in the house</ColumnHead>
+        <ColumnHead icon={Cloud}>Copy outside the house</ColumnHead>
       </div>
 
       <div className="hidden flex-col gap-2 md:flex">
@@ -360,9 +404,8 @@ export function BackupMap({ legs }: { legs: BackupLeg[] }) {
             <div className="rounded-xl border border-border bg-card px-3.5 py-3">
               <p className="text-sm font-medium text-foreground">{thing.name}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{thing.about}</p>
-              <p className="mt-1 text-xs text-muted-foreground md:hidden">Lives on: {thing.livesOn}</p>
             </div>
-            <p className="hidden items-center px-1 text-sm text-muted-foreground md:flex">{thing.livesOn}</p>
+            <PlaceTile livesOn={thing.livesOn} />
             <CopyCell copy={thing.inTheHouse} legs={byId} heading="Copy in the house" emptyText={thing.noHouseCopy} />
             <CopyCell copy={thing.outside} legs={byId} heading="Copy outside the house" emptyText={thing.noOutsideCopy} />
           </div>
