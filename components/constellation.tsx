@@ -15,7 +15,7 @@ import { useEffect, useRef } from "react"
  */
 
 // ox/oy is the extra velocity from the pointer's push; it decays on its own.
-type Star = { x: number; y: number; vx: number; vy: number; ox: number; oy: number; r: number; a: number }
+type Star = { x: number; y: number; vx: number; vy: number; ox: number; oy: number; r: number; a: number; links: boolean }
 
 const BLUE = "122, 178, 255" // light sky blue
 
@@ -56,7 +56,7 @@ export function Constellation() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const small = window.matchMedia("(max-width: 640px)").matches
     const frameMs = small ? 1000 / 30 : 1000 / 60
-    const linkDist = small ? 115 : 150
+    const linkDist = small ? 85 : 100
     const pointerRadius = small ? 100 : 130
 
     const sprite = makeSprite()
@@ -69,21 +69,33 @@ export function Constellation() {
 
     const seed = () => {
       const count = Math.max(26, Math.min(90, Math.round((w * h) / (small ? 9000 : 11000))))
+      // Loose clumps, as in the reference: most stars gather around a few centres, the
+      // rest are scattered alone. Only the clumped stars (mostly) get lines.
+      const centres = Array.from({ length: Math.max(3, Math.round(count / 9)) }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+      }))
+      const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2 // roughly -3..3, bell-shaped
+      const spread = small ? 45 : 65
       stars = Array.from({ length: count }, () => {
         const speed = 0.03 + Math.random() * 0.07 // px per frame: a few px per second
         const angle = Math.random() * Math.PI * 2
-        // Mostly small stars, some medium, a few large: r is the visible core.
+        const clumped = Math.random() < 0.62
+        const c = centres[Math.floor(Math.random() * centres.length)]
+        // Mostly tiny stars, some small, a few larger: r is the visible core.
         const roll = Math.random()
-        const r = roll < 0.5 ? 1.3 + Math.random() * 0.5 : roll < 0.85 ? 2 + Math.random() * 0.6 : 2.8 + Math.random() * 0.5
+        const r = roll < 0.6 ? 0.9 + Math.random() * 0.4 : roll < 0.9 ? 1.5 + Math.random() * 0.5 : 2.2 + Math.random() * 0.5
         return {
-          x: Math.random() * w,
-          y: Math.random() * h,
+          x: clumped ? c.x + gauss() * spread : Math.random() * w,
+          y: clumped ? c.y + gauss() * spread : Math.random() * h,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
           ox: 0,
           oy: 0,
           r,
-          a: r > 1.9 ? 1 : 0.75 + Math.random() * 0.25,
+          a: r > 2 ? 1 : 0.7 + Math.random() * 0.3,
+          // Fixed per star, so a star either has lines or never does: no flicker.
+          links: Math.random() < (clumped ? 0.9 : 0.2),
         }
       })
     }
@@ -101,18 +113,28 @@ export function Constellation() {
       ctx.fillRect(-w, -h * 2, w * 2, h * 4)
       ctx.restore()
       ctx.lineWidth = 0.5
+      // Each linking star reaches for its (up to) 3 nearest linking neighbours; a pair
+      // is drawn once however many stars pick it.
+      const drawn = new Set<number>()
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i]
-        for (let j = i + 1; j < stars.length; j++) {
-          const t = stars[j]
-          const d = Math.hypot(s.x - t.x, s.y - t.y)
-          if (d < linkDist) {
-            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.6 * 0.14})`
-            ctx.beginPath()
-            ctx.moveTo(s.x, s.y)
-            ctx.lineTo(t.x, t.y)
-            ctx.stroke()
-          }
+        if (!s.links) continue
+        const near: { j: number; d: number }[] = []
+        for (let j = 0; j < stars.length; j++) {
+          if (j === i || !stars[j].links) continue
+          const d = Math.hypot(s.x - stars[j].x, s.y - stars[j].y)
+          if (d < linkDist) near.push({ j, d })
+        }
+        near.sort((p, q) => p.d - q.d)
+        for (const { j, d } of near.slice(0, 3)) {
+          const key = i < j ? i * 1000 + j : j * 1000 + i
+          if (drawn.has(key)) continue
+          drawn.add(key)
+          ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.6 * 0.13})`
+          ctx.beginPath()
+          ctx.moveTo(s.x, s.y)
+          ctx.lineTo(stars[j].x, stars[j].y)
+          ctx.stroke()
         }
       }
       for (const s of stars) {
