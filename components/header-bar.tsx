@@ -33,7 +33,7 @@ export function HeaderBar({ uptime }: { uptime: string }) {
         {/* The name alone, on the mark's centre line. Uptime lives in the dot's
             tooltip and in the System card, not in a second line here. */}
         <h1
-          className="truncate text-2xl leading-none tracking-tight text-foreground"
+          className="truncate text-[22px] leading-none tracking-normal text-foreground/85"
           style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 400 }}
         >
           Mulderserver
