@@ -36,6 +36,8 @@ type Thing = {
   noHouseCopy?: string
   outside: Copy | null
   noOutsideCopy?: string
+  /** A note under the description. Wording approved by Matthijs 2026-10-20; it names no counts, so it cannot go stale. */
+  note?: string
 }
 
 /**
@@ -61,6 +63,7 @@ const THINGS: Thing[] = [
     // in the vault, so they are covered by both.
     name: "Second Brain AI system",
     about: "Vendor-independent: notes, memory, projects, rules and skills for any AI",
+    note: "If Claude is gone: give any AI access to the Second Brain folder and tell it to read README.md.",
     livesOn: "Proton Drive",
     inTheHouse: { legId: "proton-to-hdd", where: "8TB drive" },
     outside: { legId: "vault-to-github", where: "GitHub (private)", when: "Every save, with history" },
@@ -349,6 +352,7 @@ function PhoneMap({ legs }: { legs: Map<string, BackupLeg> }) {
               </summary>
               <div className="flex flex-col gap-4 px-3.5 pb-4 pl-10">
                 <p className="text-xs text-muted-foreground">{thing.about}</p>
+                {thing.note && <p className="-mt-2 text-xs text-foreground/80">{thing.note}</p>}
                 <LivesOnLine livesOn={thing.livesOn} />
                 <CopyLine icon={House} heading="In the house" copy={thing.inTheHouse} legs={legs} emptyText={thing.noHouseCopy} />
                 <CopyLine icon={Cloud} heading="Outside the house" copy={thing.outside} legs={legs} emptyText={thing.noOutsideCopy} />
@@ -404,6 +408,7 @@ export function BackupMap({ legs }: { legs: BackupLeg[] }) {
             <div className="rounded-xl border border-border bg-card px-3.5 py-3">
               <p className="text-sm font-medium text-foreground">{thing.name}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{thing.about}</p>
+              {thing.note && <p className="mt-1.5 text-xs text-foreground/80">{thing.note}</p>}
             </div>
             <PlaceTile livesOn={thing.livesOn} />
             <CopyCell copy={thing.inTheHouse} legs={byId} heading="Copy in the house" emptyText={thing.noHouseCopy} />
