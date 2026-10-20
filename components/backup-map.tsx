@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Cloud, House, X } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import type { BackupLeg } from "@/lib/backups"
 import { formatAge, verdictStyle } from "@/components/backup-status"
 
@@ -177,6 +178,159 @@ function CopyCell({
   )
 }
 
+/** What one copy looks like to a reader: missing, just "the originals", or a job's verdict. */
+type CopyState =
+  | { kind: "none" }
+  | { kind: "static" }
+  | { kind: "leg"; leg: BackupLeg | undefined; attention: boolean }
+
+function copyState(copy: Copy | null, legs: Map<string, BackupLeg>): CopyState {
+  if (copy === null) return { kind: "none" }
+  if (copy.legId === undefined) return { kind: "static" }
+  const leg = legs.get(copy.legId)
+  return { kind: "leg", leg, attention: leg === undefined || leg.verdict !== "ok" }
+}
+
+/** The small house or cloud badge on a closed phone row: the icon says which copy, the mark says how it is. */
+function CopyPill({ icon: Icon, state, label }: { icon: LucideIcon; state: CopyState; label: string }) {
+  if (state.kind === "none") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-dashed border-usage-high/50 px-2 py-1 text-usage-high"
+        role="img"
+        aria-label={`${label}: no copy`}
+      >
+        <Icon className="size-3.5" aria-hidden="true" />
+        <X className="size-3" aria-hidden="true" />
+      </span>
+    )
+  }
+  const style = verdictStyle(state.kind === "leg" ? (state.leg?.verdict ?? "unknown") : "unknown")
+  const bad = state.kind === "leg" && state.attention
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
+        bad ? `border-usage-mid/50 ${style.text}` : state.kind === "leg" ? "border-border text-usage-low" : "border-border text-muted-foreground"
+      }`}
+      role="img"
+      aria-label={`${label}: ${state.kind === "leg" ? style.label : "originals live here"}`}
+    >
+      <Icon className="size-3.5" aria-hidden="true" />
+      {bad ? <AlertTriangle className="size-3" aria-hidden="true" /> : <Check className="size-3" aria-hidden="true" />}
+    </span>
+  )
+}
+
+/** One copy inside an opened phone row: a line, not a box. */
+function CopyLine({
+  icon: Icon,
+  heading,
+  copy,
+  legs,
+  emptyText,
+}: {
+  icon: LucideIcon
+  heading: string
+  copy: Copy | null
+  legs: Map<string, BackupLeg>
+  emptyText?: string
+}) {
+  const state = copyState(copy, legs)
+  let body: React.ReactNode
+  if (copy === null || state.kind === "none") {
+    body = (
+      <>
+        <p className="text-sm text-usage-high">No copy</p>
+        {emptyText && <p className="text-xs text-muted-foreground">{emptyText}</p>}
+      </>
+    )
+  } else if (state.kind === "static") {
+    body = (
+      <>
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <span className="size-2 shrink-0 rounded-full bg-muted-foreground" aria-hidden="true" />
+          {copy.where}
+        </p>
+        <p className="text-xs text-muted-foreground">{copy.note}</p>
+      </>
+    )
+  } else {
+    const style = verdictStyle(state.leg?.verdict ?? "unknown")
+    const when = copy.when ?? (state.leg ? shortSchedule(state.leg.schedule) : "")
+    body = (
+      <>
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <span className={`size-2 shrink-0 rounded-full ${style.dot}`} aria-hidden="true" />
+          {copy.where}
+          {state.attention && <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {when}
+          {state.leg && <> · {formatAge(state.leg.ageHours)}</>}
+        </p>
+      </>
+    )
+  }
+  return (
+    <div className="flex items-start gap-3">
+      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{heading}</p>
+        {body}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The phone version of the map (below the md breakpoint, where the four-column row
+ * cannot fit). One slim row per thing with a house badge and a cloud badge, so all
+ * seven fit on about one screen and a gap shows as a red crossed badge. Tapping a
+ * row opens its details. Native <details>, no client JavaScript. A row whose job is
+ * late, overdue or failed starts open; a copy that simply does not exist stays shut,
+ * because the red badge already says so.
+ */
+function PhoneMap({ legs }: { legs: Map<string, BackupLeg> }) {
+  return (
+    <div>
+      <p className="mb-3 flex items-center gap-4 px-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <House className="size-3.5" aria-hidden="true" /> Copy in the house
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Cloud className="size-3.5" aria-hidden="true" /> Copy outside it
+        </span>
+      </p>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        {THINGS.map((thing, index) => {
+          const house = copyState(thing.inTheHouse, legs)
+          const outside = copyState(thing.outside, legs)
+          const problem = (house.kind === "leg" && house.attention) || (outside.kind === "leg" && outside.attention)
+          return (
+            <details key={thing.name} open={problem} className={`group ${index > 0 ? "border-t border-border" : ""}`}>
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground group-open:hidden" aria-hidden="true" />
+                <ChevronDown className="hidden size-4 shrink-0 text-muted-foreground group-open:block" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{thing.name}</span>
+                <CopyPill icon={House} state={house} label="Copy in the house" />
+                <CopyPill icon={Cloud} state={outside} label="Copy outside the house" />
+              </summary>
+              <div className="flex flex-col gap-4 px-3.5 pb-4 pl-10">
+                <div>
+                  <p className="text-xs text-muted-foreground">{thing.about}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Lives on: {thing.livesOn}</p>
+                </div>
+                <CopyLine icon={House} heading="In the house" copy={thing.inTheHouse} legs={legs} emptyText={thing.noHouseCopy} />
+                <CopyLine icon={Cloud} heading="Outside the house" copy={thing.outside} legs={legs} emptyText={thing.noOutsideCopy} />
+              </div>
+            </details>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function BackupMap({ legs }: { legs: BackupLeg[] }) {
   const byId = new Map(legs.map((leg) => [leg.id, leg]))
 
@@ -186,6 +340,10 @@ export function BackupMap({ legs }: { legs: BackupLeg[] }) {
         What is protected and where its copies are kept
       </h2>
 
+      <div className="md:hidden">
+        <PhoneMap legs={byId} />
+      </div>
+
       <div className={`hidden gap-2 px-1 pb-2 text-xs text-muted-foreground md:grid ${GRID}`}>
         <span>What we protect</span>
         <span>Lives on</span>
@@ -193,7 +351,7 @@ export function BackupMap({ legs }: { legs: BackupLeg[] }) {
         <span>Copy outside the house</span>
       </div>
 
-      <div className="flex flex-col gap-5 md:gap-2">
+      <div className="hidden flex-col gap-2 md:flex">
         {THINGS.map((thing) => (
           <div
             key={thing.name}
