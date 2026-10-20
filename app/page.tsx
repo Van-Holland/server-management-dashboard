@@ -8,7 +8,7 @@ import { MaintenanceNote } from "@/components/maintenance-note"
 import { getBackups } from "@/lib/backups"
 import { getHardware } from "@/lib/hardware"
 import { getHealthSnapshot } from "@/lib/health"
-import { buildChecks, summarize } from "@/lib/health-checks"
+import { buildChecks, splitWarnings, summarize } from "@/lib/health-checks"
 import { getMediaSummary } from "@/lib/media"
 import { getSystemStats } from "@/lib/system-stats"
 
@@ -28,12 +28,8 @@ export default async function HomePage() {
   ])
 
   // Two levels: red needs action today, maintenance needs action this week. A failed or overdue backup is a red one.
-  const warnings = snapshot.warnings
-  const alerts = warnings.filter((w) => w.level !== "maintenance")
-  const maintenance = warnings.filter((w) => w.level === "maintenance")
-  if (backups.worst === "failed" || backups.worst === "overdue") {
-    alerts.push({ id: "backups", title: "A backup job has failed or is overdue", detail: "Open the Backups page to see which one." })
-  }
+  const lists = splitWarnings(snapshot, backups)
+  const { alerts, maintenance } = lists
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
@@ -46,7 +42,7 @@ export default async function HomePage() {
             server is doing, then the tools (the arr stack and the downloaders). */}
         <DailyApps />
         <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} uptime={stats.uptime}>
-          <ServerPages media={media} backups={backups} health={summarize(buildChecks(snapshot, backups))} />
+          <ServerPages media={media} backups={backups} health={summarize(buildChecks(snapshot, backups), lists)} />
         </StatsCards>
         <ToolsSection />
       </div>

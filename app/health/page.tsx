@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react"
 import { HealthOverview } from "@/components/health-overview"
 import { getBackups } from "@/lib/backups"
 import { getHealthSnapshot } from "@/lib/health"
-import { buildChecks, summarize } from "@/lib/health-checks"
+import { buildChecks, splitWarnings, summarize } from "@/lib/health-checks"
 
 // Reads live files and live services on every request; must never be frozen into a build-time snapshot.
 export const dynamic = "force-dynamic"
@@ -13,7 +13,7 @@ const TONE = { ok: ["bg-usage-low", "text-usage-low"], maintenance: ["bg-usage-m
 export default async function HealthPage() {
   const [snapshot, backups] = await Promise.all([getHealthSnapshot(), getBackups()])
   const checks = buildChecks(snapshot, backups, snapshot.checkedMs)
-  const summary = summarize(checks)
+  const summary = summarize(checks, splitWarnings(snapshot, backups))
   const [dot, text] = TONE[summary.status]
   const reported = snapshot.host.probe ? Math.max(0, Math.round((snapshot.checkedMs - Date.parse(snapshot.host.probe.ranAtIso)) / 60000)) : null
 

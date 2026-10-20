@@ -241,7 +241,7 @@ const CATALOGUE: Entry[] = [
     fix: "Restart when nobody is watching. SSH is back in about a minute.",
     match: is("reboot"),
     has: (c) => !!c.p,
-    ok: (c) => `Nothing waiting. Up ${c.p?.host.uptimeDays} days`,
+    ok: (c) => `Nothing waiting. Up ${c.p?.host.uptimeDays ? `${c.p.host.uptimeDays} days` : "less than a day"}`,
   },
   {
     id: "updates",
@@ -373,16 +373,30 @@ export function buildChecks(s: HealthSnapshot, backups: BackupsSnapshot | null, 
   return checks
 }
 
+/**
+ * The two lists the home page shows: the red box and the calm Maintenance line. A failed or overdue backup is a red one.
+ * One function for both pages, so the box, the Health card and the Health page always count the same things.
+ */
+export function splitWarnings(s: HealthSnapshot, backups: BackupsSnapshot | null): { alerts: HealthWarning[]; maintenance: HealthWarning[] } {
+  const alerts = s.warnings.filter((w) => w.level !== "maintenance")
+  const maintenance = s.warnings.filter((w) => w.level === "maintenance")
+  if (backups && (backups.worst === "failed" || backups.worst === "overdue")) {
+    alerts.push({ id: "backups", title: "A backup job has failed or is overdue", detail: "Open the Backups page to see which one." })
+  }
+  return { alerts, maintenance }
+}
+
 export type HealthSummary = { status: "ok" | "maintenance" | "alert"; total: number; alerts: number; maintenance: number; unknown: number; text: string }
 
-export function summarize(checks: HealthCheck[]): HealthSummary {
-  const alerts = checks.filter((c) => c.status === "alert").length
-  const maintenance = checks.filter((c) => c.status === "maintenance").length
+/** The card's line uses the same counts as the box and the Maintenance line (warnings), and the total is the number of checks. */
+export function summarize(checks: HealthCheck[], lists: { alerts: HealthWarning[]; maintenance: HealthWarning[] }): HealthSummary {
+  const alerts = lists.alerts.length
+  const maintenance = lists.maintenance.length
   const unknown = checks.filter((c) => c.status === "unknown").length
   const status = alerts > 0 ? "alert" : maintenance > 0 ? "maintenance" : "ok"
   const text =
     alerts > 0
-      ? `${alerts} ${alerts === 1 ? "check needs" : "checks need"} attention today`
+      ? `${alerts} ${alerts === 1 ? "thing needs" : "things need"} attention today`
       : maintenance > 0
         ? `${maintenance} ${maintenance === 1 ? "thing" : "things"} for this week`
         : `All ${checks.length} checks fine`
