@@ -21,10 +21,17 @@
  * written to catch.
  */
 
+import { getHostWarnings } from "@/lib/health-probe"
+
 export type HealthWarning = {
   id: string
   title: string
   detail: string
+  /**
+   * "alert" (the default) needs action today and goes in the red "Needs attention" box. "maintenance" needs action this
+   * week and goes in the calm line under it (added 2026-10-20).
+   */
+  level?: "alert" | "maintenance"
 }
 
 const TIMEOUT_MS = 3000
@@ -46,13 +53,18 @@ const INDEXER_DOWN_AFTER_MS = 60 * 60 * 1000
  * time within ~20 seconds, while torrents carried on. A banner that flashes red
  * for 20 seconds teaches you to ignore it, so a qBittorrent problem is only
  * reported once it has lasted this long. The real outage of 2026-10-15 lasted
- * four days; two minutes costs nothing against that.
+ * four days; ten minutes costs nothing against that.
+ *
+ * Two minutes until 2026-10-20, when a 24-hour count showed 121 dips (median 40 s,
+ * 23 over two minutes, longest 11 minutes), so the box fired about 23 times a day for
+ * things that mend themselves. The watchdog (scripts/vpn-watchdog.sh) restarts the
+ * VPN stack after ten minutes, so a warning that outlives ten minutes means that failed too.
  *
  * The clock needs memory between page loads, so a small watcher polls qBittorrent
  * in the background and remembers since when it has looked wrong. The env knobs
  * exist so the behaviour can be tested in seconds rather than minutes.
  */
-const QBIT_GRACE_MS = Number(process.env.HEALTH_QBIT_GRACE_MS ?? 120_000)
+const QBIT_GRACE_MS = Number(process.env.HEALTH_QBIT_GRACE_MS ?? 600_000)
 const QBIT_POLL_MS = Number(process.env.HEALTH_QBIT_POLL_MS ?? 30_000)
 
 type QbitPrefs = { listen_port?: number; current_network_interface?: string }
@@ -213,5 +225,6 @@ export async function getHealthWarnings(): Promise<HealthWarning[]> {
   ensureQbitWatcher()
   // Until the watcher's first poll lands (right after a restart) there is nothing
   // to report; the first real answer arrives within a few seconds.
-  return [...qbitWarningsPastGrace(), ...(await checkProwlarr())]
+  const [indexers, host] = await Promise.all([checkProwlarr(), getHostWarnings()])
+  return [...qbitWarningsPastGrace(), ...indexers, ...host]
 }

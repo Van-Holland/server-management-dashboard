@@ -4,6 +4,7 @@ import { DailyApps } from "@/components/apps-section"
 import { ToolsSection } from "@/components/tools-section"
 import { ServerPages } from "@/components/server-pages"
 import { HealthBanner } from "@/components/health-banner"
+import { MaintenanceNote } from "@/components/maintenance-note"
 import { getBackups } from "@/lib/backups"
 import { getHardware } from "@/lib/hardware"
 import { getHealthWarnings } from "@/lib/health"
@@ -25,12 +26,20 @@ export default async function HomePage() {
     getMediaSummary(),
   ])
 
+  // Two levels: red needs action today, maintenance needs action this week. A failed or overdue backup is a red one.
+  const alerts = warnings.filter((w) => w.level !== "maintenance")
+  const maintenance = warnings.filter((w) => w.level === "maintenance")
+  if (backups.worst === "failed" || backups.worst === "overdue") {
+    alerts.push({ id: "backups", title: "A backup job has failed or is overdue", detail: "Open the Backups page to see which one." })
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
       <div className="flex flex-col gap-8 sm:gap-10">
         <HeaderBar uptime={stats.uptime} />
         {/* Empty unless torrents or an indexer are silently broken. */}
-        <HealthBanner warnings={warnings} />
+        <HealthBanner warnings={alerts} />
+        <MaintenanceNote items={maintenance} />
         {/* Ordered by how often each part is used: the apps first, then how the
             server is doing, then the tools (the arr stack and the downloaders). */}
         <DailyApps />
