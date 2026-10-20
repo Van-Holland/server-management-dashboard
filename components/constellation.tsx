@@ -34,7 +34,9 @@ export function Constellation() {
     let w = 0
     let h = 0
     let stars: Star[] = []
-    const pointer = { x: -9999, y: -9999, on: false }
+    // `target` is where the cursor really is; `x`/`y` trail it, and `power` eases
+    // between 0 and 1, so the cursor's influence fades in and out instead of snapping.
+    const pointer = { x: 0, y: 0, tx: 0, ty: 0, on: false, power: 0 }
 
     const seed = () => {
       const count = Math.max(28, Math.min(90, Math.round((w * h) / (small ? 9000 : 13000))))
@@ -84,10 +86,10 @@ export function Constellation() {
             ctx.stroke()
           }
         }
-        if (pointer.on) {
+        if (pointer.power > 0.01) {
           const d = Math.hypot(s.x - pointer.x, s.y - pointer.y)
           if (d < pointerRadius) {
-            ctx.strokeStyle = `rgba(${WARM}, ${(1 - d / pointerRadius) * 0.22})`
+            ctx.strokeStyle = `rgba(${WARM}, ${(1 - d / pointerRadius) * 0.18 * pointer.power})`
             ctx.lineWidth = 0.6
             ctx.beginPath()
             ctx.moveTo(s.x, s.y)
@@ -105,14 +107,18 @@ export function Constellation() {
     }
 
     const step = () => {
+      pointer.power += ((pointer.on ? 1 : 0) - pointer.power) * 0.03
+      pointer.x += (pointer.tx - pointer.x) * 0.05
+      pointer.y += (pointer.ty - pointer.y) * 0.05
       for (const s of stars) {
-        if (pointer.on) {
+        if (pointer.power > 0.01) {
           const dx = pointer.x - s.x
           const dy = pointer.y - s.y
           const d = Math.hypot(dx, dy)
-          // A faint pull toward the cursor; it fades to nothing at the edge of the radius.
-          if (d < pointerRadius && d > 1) {
-            const pull = (1 - d / pointerRadius) * 0.012
+          // A very faint, slow pull toward the cursor; it fades to nothing at the
+          // edge of the radius and never lets a star land on the pointer.
+          if (d < pointerRadius && d > 40) {
+            const pull = (1 - d / pointerRadius) * 0.0025 * pointer.power
             s.x += dx * pull
             s.y += dy * pull
           }
@@ -145,8 +151,13 @@ export function Constellation() {
     }
 
     const onMove = (e: PointerEvent) => {
-      pointer.x = e.clientX
-      pointer.y = e.clientY
+      pointer.tx = e.clientX
+      pointer.ty = e.clientY
+      if (!pointer.on && pointer.power < 0.05) {
+        // Coming in from outside: start the trailing point at the cursor, not at the last place it was.
+        pointer.x = e.clientX
+        pointer.y = e.clientY
+      }
       pointer.on = true
     }
     const onLeave = () => {
