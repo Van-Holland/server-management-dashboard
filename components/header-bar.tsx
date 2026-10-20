@@ -29,14 +29,14 @@ export function HeaderBar({ uptime }: { uptime: string }) {
   return (
     <header className="flex items-center justify-between gap-4">
       <div className="flex min-w-0 items-center gap-3">
-        <img src="/logo.png" alt="" aria-hidden="true" width={44} height={44} className="size-11 shrink-0" />
+        <img src="/logo.png" alt="" aria-hidden="true" width={36} height={36} className="size-9 shrink-0" />
         {/* The name alone, on the mark's centre line. Uptime lives in the dot's
             tooltip and in the System card, not in a second line here. */}
         <h1
-          className="truncate text-[22px] leading-none tracking-normal text-foreground/85"
+          className="truncate text-[24px] leading-none tracking-normal text-foreground/85"
           style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 400 }}
         >
-          Mulderserver
+          mulderserver
         </h1>
         <span className="group relative -ml-1.5">
           {/* Breathing: the server is alive. Hover (computer) or tap (phone) shows
