@@ -180,8 +180,9 @@ export function evaluateWatchdog(w: WatchdogStatus, nowMs: number): HealthWarnin
   if (w.state === "gave-up") {
     return [alert("vpn-watchdog-gave-up", "The automatic VPN restart did not fix it", "The VPN stack was restarted but qBittorrent still has no port. Restart gluetun, then qbittorrent and slskd by hand.")]
   }
+  // The script goes back to "ok" two minutes after a restart but keeps the time of the last one, so go by that time.
   const restartedMs = w.lastRestartIso ? Date.parse(w.lastRestartIso) : Number.NaN
-  if (w.state === "restarted" && Number.isFinite(restartedMs) && nowMs - restartedMs < 24 * 60 * 60 * 1000) {
+  if (Number.isFinite(restartedMs) && nowMs - restartedMs < 24 * 60 * 60 * 1000) {
     return [maint("vpn-restarted", "The VPN was restarted automatically", `At ${when(w.lastRestartIso)} qBittorrent had been without a port for 10 minutes, so the watchdog restarted gluetun, qBittorrent and slskd. It worked.`)]
   }
   return []
