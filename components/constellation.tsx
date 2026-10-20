@@ -100,14 +100,14 @@ export function Constellation() {
       ctx.fillStyle = haze
       ctx.fillRect(-w, -h * 2, w * 2, h * 4)
       ctx.restore()
-      ctx.lineWidth = 0.8
+      ctx.lineWidth = 0.5
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i]
         for (let j = i + 1; j < stars.length; j++) {
           const t = stars[j]
           const d = Math.hypot(s.x - t.x, s.y - t.y)
           if (d < linkDist) {
-            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) * 0.22})`
+            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.6 * 0.14})`
             ctx.beginPath()
             ctx.moveTo(s.x, s.y)
             ctx.lineTo(t.x, t.y)
