@@ -56,7 +56,7 @@ export function Constellation() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const small = window.matchMedia("(max-width: 640px)").matches
     const frameMs = small ? 1000 / 30 : 1000 / 60
-    const linkDist = small ? 85 : 100
+    const linkDist = small ? 90 : 105
     const pointerRadius = small ? 100 : 130
 
     const sprite = makeSprite()
@@ -80,7 +80,7 @@ export function Constellation() {
       stars = Array.from({ length: count }, () => {
         const speed = 0.03 + Math.random() * 0.07 // px per frame: a few px per second
         const angle = Math.random() * Math.PI * 2
-        const clumped = Math.random() < 0.62
+        const clumped = Math.random() < 0.68
         const c = centres[Math.floor(Math.random() * centres.length)]
         // Mostly tiny stars, some small, a few larger: r is the visible core.
         const roll = Math.random()
@@ -95,7 +95,7 @@ export function Constellation() {
           r,
           a: r > 2 ? 1 : 0.7 + Math.random() * 0.3,
           // Fixed per star, so a star either has lines or never does: no flicker.
-          links: Math.random() < (clumped ? 0.9 : 0.2),
+          links: Math.random() < (clumped ? 0.92 : 0.25),
         }
       })
     }
