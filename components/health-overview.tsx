@@ -42,8 +42,11 @@ function Row({ check }: { check: HealthCheck }) {
         <ChevronRight className="size-4 shrink-0 text-muted-foreground group-open:hidden" aria-hidden="true" />
         <ChevronDown className="hidden size-4 shrink-0 text-muted-foreground group-open:block" aria-hidden="true" />
         <span className={`size-2 shrink-0 rounded-full ${DOT[check.status]}`} aria-hidden="true" />
-        <span className="w-40 shrink-0 truncate text-foreground sm:w-52">{check.name}</span>
-        <span className={`min-w-0 flex-1 truncate text-xs ${check.status === "ok" ? "text-muted-foreground" : TEXT[check.status]}`}>{check.summary}</span>
+        {/* Phone: the name with its sentence underneath. Wider screens: one line, name then sentence. */}
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+          <span className="shrink-0 text-foreground sm:w-52 sm:truncate">{check.name}</span>
+          <span className={`min-w-0 text-xs sm:flex-1 sm:truncate ${check.status === "ok" ? "text-muted-foreground" : TEXT[check.status]}`}>{check.summary}</span>
+        </span>
         <span className="hidden shrink-0 text-xs text-muted-foreground md:inline">{check.every}</span>
       </summary>
       <div className="space-y-2 px-4 pb-4 pl-11 text-xs text-muted-foreground">
