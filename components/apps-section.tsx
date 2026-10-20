@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react"
 import { Dumbbell } from "lucide-react"
 import { AmbientTrigger } from "@/components/ambient-trigger"
+import { FindersFolder } from "@/components/finders-folder"
 import { DAILY, type AppEntry } from "@/lib/apps"
 
 /**
@@ -66,6 +67,10 @@ export function DailyApps() {
             <DailyTile app={app} index={index} />
           </div>
         ))}
+        {/* The Finders folder: Jellyseerr, Lidarr and slskd, opened as a popup (components/finders-folder.tsx). */}
+        <div className="flex w-[calc((100%-1rem)/3)] justify-center sm:w-auto">
+          <FindersFolder index={DAILY.length} />
+        </div>
       </div>
     </section>
   )

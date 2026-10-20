@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Dumbbell, House, LayoutGrid, Search, ShieldCheck, type LucideIcon } from "lucide-react"
-import { DAILY, PAGES, TOOLS, type AppEntry } from "@/lib/apps"
+import { DAILY, FINDERS, PAGES, TOOLS, type AppEntry } from "@/lib/apps"
 
 /**
  * Press Cmd+K (Ctrl+K elsewhere), type a few letters of an app, press Enter.
@@ -41,7 +41,7 @@ function toItem(entry: Pick<AppEntry, "name" | "description" | "href" | "keyword
   }
 }
 
-const ITEMS: Item[] = [...DAILY, ...TOOLS.flatMap((g) => g.tools), ...PAGES].map(toItem)
+const ITEMS: Item[] = [...DAILY, ...FINDERS, ...TOOLS.flatMap((g) => g.tools), ...PAGES].map(toItem)
 
 /** Every word typed must appear somewhere; names that start with the query come first. */
 function search(query: string): Item[] {

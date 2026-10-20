@@ -416,3 +416,101 @@ dialog.launcher[open] {
     transform: none;
   }
 }
+
+/* The Finders folder popup (components/finders-folder.tsx), added 2026-10-20. It grows out of the folder icon (--dx and --dy are the
+   icon's offset from the middle of the screen, set in JavaScript), the page behind it blurs, and the apps float in one by one. On a
+   phone it is a sheet that slides up from the bottom. */
+dialog.finders {
+  margin: auto;
+  width: min(24rem, calc(100vw - 2rem));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), inset 0 1px 0 oklch(0.97 0.02 80 / 6%);
+}
+dialog.finders::backdrop {
+  background: rgba(8, 7, 6, 0.55);
+  backdrop-filter: blur(8px);
+}
+dialog.finders[open] {
+  animation: finders-in 0.42s cubic-bezier(0.2, 0.9, 0.25, 1.08) both;
+}
+dialog.finders[open]::backdrop {
+  animation: finders-fade-in 0.3s ease both;
+}
+dialog.finders[open][data-closing] {
+  animation: finders-out 0.2s cubic-bezier(0.4, 0, 0.8, 0.4) both;
+}
+dialog.finders[open][data-closing]::backdrop {
+  animation: finders-fade-out 0.2s ease both;
+}
+dialog.finders[open] .finders-item {
+  animation: finders-item-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--n) * 70ms + 160ms);
+}
+@keyframes finders-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.22);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes finders-out {
+  to {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.22);
+  }
+}
+@keyframes finders-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes finders-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes finders-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+@media (max-width: 639px) {
+  dialog.finders {
+    margin: auto 0 0;
+    width: 100%;
+    max-width: none;
+    border-radius: 26px 26px 0 0;
+    border-bottom: 0;
+  }
+  @keyframes finders-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes finders-out {
+    to {
+      transform: translateY(100%);
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog.finders[open],
+  dialog.finders[open]::backdrop,
+  dialog.finders[open][data-closing],
+  dialog.finders[open][data-closing]::backdrop,
+  dialog.finders[open] .finders-item {
+    animation: none;
+  }
+}

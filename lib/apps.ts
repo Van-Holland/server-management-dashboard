@@ -33,7 +33,6 @@ export type AppEntry = {
 /** The apps you USE. Which ones belong here is a judgement about this household's habits. */
 export const DAILY: AppEntry[] = [
   { name: "Jellyfin", description: "Watch films and shows", href: `http://${TS_IP}:8096`, logo: "jellyfin", tint: "#8b6cf0", keywords: ["movies", "tv", "stream", "watch", "kids"] },
-  { name: "Jellyseerr", description: "Request something new", href: `http://${TS_IP}:5055`, logo: "jellyseerr", tint: "#7c6cf0", keywords: ["request", "add", "movies", "shows"] },
   { name: "Immich", description: "Photos and videos", href: `http://${TS_IP}:2283`, logo: "immich", tint: "#e0568a", keywords: ["pictures", "camera", "gallery"] },
   { name: "Navidrome", description: "Music", href: `http://${TS_IP}:4533`, logo: "navidrome", tint: "#3b82f6", keywords: ["songs", "albums", "listen"] },
   // Plain IP:port (2026-10-19): with Tailscale DNS on, the phone lost its internet,
@@ -42,17 +41,28 @@ export const DAILY: AppEntry[] = [
   { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, logo: null, tint: "#f59e0b", keywords: ["workout", "gym", "weight", "training"] },
 ]
 
+/**
+ * The "Finders" folder (2026-10-20): the apps you use to GET new things into the library. Jellyseerr is a request box for films and
+ * shows, Lidarr is a wish list for albums, slskd is a search tool for rare music. They moved here from "Your apps" and the Tools
+ * list, so the home page keeps five icons and the Tools list keeps only the machinery.
+ */
+export const FINDERS: AppEntry[] = [
+  { name: "Jellyseerr", description: "Films and shows", href: `http://${TS_IP}:5055`, logo: "jellyseerr", tint: "#7c6cf0", keywords: ["request", "add", "movies", "shows", "ask"] },
+  { name: "Lidarr", description: "Albums, from Usenet and torrents", href: `http://${TS_IP}:8686`, logo: "lidarr", tint: "#00a65b", keywords: ["music", "albums", "artists", "wish list"] },
+  // slskd's web UI is published by gluetun, not by slskd's own compose: it shares gluetun's network namespace. Port 5030 all the same.
+  { name: "slskd", description: "Rare music, from Soulseek", href: `http://${TS_IP}:5030`, logo: "slskd", tint: "#3b82f6", keywords: ["soulseek", "music", "dj", "rare", "search"] },
+]
+
 export type ToolEntry = AppEntry
 export type ToolGroup = { title: string; tools: ToolEntry[] }
 
 export const TOOLS: ToolGroup[] = [
   {
-    // "Arr stack" is Matthijs's name for Sonarr, Radarr, Lidarr, Bazarr and Prowlarr.
+    // "Arr stack" is Matthijs's name for Sonarr, Radarr, Lidarr, Bazarr and Prowlarr. Lidarr moved to the Finders folder.
     title: "Arr stack",
     tools: [
       { name: "Sonarr", description: "TV shows", href: `http://${TS_IP}:8989`, logo: "sonarr", tint: "#35c5f4", keywords: ["series", "tv"] },
       { name: "Radarr", description: "Films", href: `http://${TS_IP}:7878`, logo: "radarr", tint: "#ffc230", keywords: ["movies"] },
-      { name: "Lidarr", description: "Music", href: `http://${TS_IP}:8686`, logo: "lidarr", tint: "#00a65b", keywords: ["albums", "artists"] },
       { name: "Bazarr", description: "Subtitles", href: `http://${TS_IP}:6767`, logo: "bazarr", tint: "#a8a8a8", keywords: ["subs", "captions"] },
       { name: "Prowlarr", description: "Search sources", href: `http://${TS_IP}:9696`, logo: "prowlarr", tint: "#f97316", keywords: ["indexers", "nzbgeek"] },
     ],
@@ -62,9 +72,6 @@ export const TOOLS: ToolGroup[] = [
     tools: [
       { name: "qBittorrent", description: "Torrent downloads", href: `http://${TS_IP}:8080`, logo: "qbittorrent", tint: "#4a90e2", keywords: ["torrents", "vpn"] },
       { name: "SABnzbd", description: "Usenet downloads", href: `http://${TS_IP}:8081`, logo: "sabnzbd", tint: "#ffcc00", keywords: ["nzb", "usenet"] },
-      // slskd's web UI is published by gluetun, not by slskd's own compose: it
-      // shares gluetun's network namespace. Port 5030 all the same.
-      { name: "slskd", description: "Music downloads", href: `http://${TS_IP}:5030`, logo: "slskd", tint: "#3b82f6", keywords: ["soulseek"] },
     ],
   },
 ]
