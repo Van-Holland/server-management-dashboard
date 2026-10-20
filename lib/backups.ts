@@ -610,10 +610,11 @@ async function timeMachine(): Promise<BackupLeg> {
 
   const age = hoursSince(lastRunMs)
   // Deliberately generous: the MacBook is portable, so a gap usually means it
-  // was away from the network, not that backups are broken. Late after a full day
-  // (was 12 hours until 2026-10-19, which made every morning after a night of
-  // sleep read as "late" and turned the home page's backup line permanently orange).
-  let verdict = judge(age, 24, 72)
+  // was away from the network, not that backups are broken. The Mac is set to back up
+  // once a day (hourly made the 8TB drive audibly busy in the sitting room, so
+  // Matthijs switched it to daily, confirmed 2026-10-20), so a normal age is anywhere
+  // up to 24 hours. Late after 36 hours (was 12 until 2026-10-19, then 24).
+  let verdict = judge(age, 36, 72)
   if (lastRunMs === null) verdict = "unknown"
 
   if (!note) {
@@ -627,7 +628,7 @@ async function timeMachine(): Promise<BackupLeg> {
     protects: "The whole MacBook",
     destination: "/mnt/storage8tb/backups/timemachine",
     offsite: false,
-    schedule: "Hourly, when on the network",
+    schedule: "Daily, when on the network",
     lastRunMs,
     ageHours: age,
     verdict,

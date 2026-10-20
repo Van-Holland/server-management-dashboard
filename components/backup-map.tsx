@@ -92,7 +92,7 @@ const THINGS: Thing[] = [
     name: "The MacBook",
     about: "Everything on it, via Time Machine",
     livesOn: "MacBook",
-    inTheHouse: { legId: "time-machine", where: "8TB drive", when: "Hourly, at home" },
+    inTheHouse: { legId: "time-machine", where: "8TB drive", when: "Daily, at home" },
     outside: null,
     noOutsideCopy: "not outside the house",
   },
