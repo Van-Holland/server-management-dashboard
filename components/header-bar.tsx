@@ -6,6 +6,7 @@ import { Search } from "lucide-react"
 export function HeaderBar({ uptime }: { uptime: string }) {
   const [now, setNow] = useState<Date | null>(null)
   const [shortcut, setShortcut] = useState("Ctrl K")
+  const [showUptime, setShowUptime] = useState(false)
 
   useEffect(() => {
     if (/Mac|iPhone|iPad/.test(navigator.platform)) setShortcut("⌘ K")
@@ -22,42 +23,47 @@ export function HeaderBar({ uptime }: { uptime: string }) {
   const date = now
     ? now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
     : ""
-  const shortDate = now
-    ? now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
-    : ""
 
   const openLauncher = () => window.dispatchEvent(new Event("open-launcher"))
 
   return (
     <header className="flex items-center justify-between gap-4">
-      {/* Mark and text block are the same height (44px) and centred on each other. */}
       <div className="flex min-w-0 items-center gap-3">
         <img src="/logo.png" alt="" aria-hidden="true" width={44} height={44} className="size-11 shrink-0" />
-        <div className="min-w-0">
-          <h1
-            className="truncate text-xl leading-none tracking-tight text-foreground sm:text-[22px]"
-            style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 500 }}
+        {/* The name alone, on the mark's centre line. Uptime lives in the dot's
+            tooltip and in the System card, not in a second line here. */}
+        <h1
+          className="truncate text-2xl leading-none tracking-tight text-foreground"
+          style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 500 }}
+        >
+          Mulderserver
+        </h1>
+        <span className="group relative -ml-1.5">
+          {/* Breathing: the server is alive. Hover (computer) or tap (phone) shows
+              the uptime. It says "up", not "all is well", because uptime is all
+              this dot actually knows. */}
+          <button
+            type="button"
+            onClick={() => setShowUptime((v) => !v)}
+            onBlur={() => setShowUptime(false)}
+            aria-label={`Online. Up ${uptime}`}
+            className="flex size-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Mulderserver
-          </h1>
-          <p className="mt-1.5 flex items-center gap-1.5 text-xs leading-none text-muted-foreground">
-            {/* Breathing: the server is alive. It says "up", not "all is well",
-                because uptime is all this line actually knows. */}
-            <span
-              className="breathe size-1.5 shrink-0 rounded-full bg-status-online text-status-online"
-              aria-hidden="true"
-            />
-            <span className="truncate">
-              Up {uptime}
-              {/* Phone: the clock moves up here so the right side is just the search icon. */}
-              <span className="tabular-nums sm:hidden"> · {shortDate}, {shortTime}</span>
-            </span>
-          </p>
-        </div>
+            <span className="breathe size-2 rounded-full bg-status-online text-status-online" aria-hidden="true" />
+          </button>
+          <span
+            role="status"
+            className={`pointer-events-none absolute left-1/2 top-full z-10 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground shadow-lg transition-opacity group-hover:opacity-100 ${
+              showUptime ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            Up {uptime}
+          </span>
+        </span>
       </div>
 
       {/* Search sits left of the clock; the clock is flush with the right edge. */}
-      <div className="flex shrink-0 items-center gap-4 sm:gap-5">
+      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
         <button
           type="button"
           onClick={openLauncher}
@@ -67,6 +73,8 @@ export function HeaderBar({ uptime }: { uptime: string }) {
         >
           <Search className="size-[18px]" aria-hidden="true" />
         </button>
+        {/* Phone: just the time. Larger screens: seconds and the full date. */}
+        <p className="text-base tabular-nums text-foreground sm:hidden">{shortTime}</p>
         <div className="hidden text-right sm:block">
           <p className="text-lg font-normal tabular-nums leading-none text-foreground">{time}</p>
           <p className="mt-1.5 text-xs leading-none text-muted-foreground">{date}</p>

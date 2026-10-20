@@ -12,6 +12,7 @@ import {
   Database,
   Download,
   Fan,
+  Clock,
   Gauge,
   HardDrive,
   Loader2,
@@ -38,7 +39,7 @@ type LiveData = {
   speedtest: SpeedtestState | null
 }
 
-export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number; hardware: Hardware }
+export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number; hardware: Hardware; uptime: string }
 
 const POLL_MS = 2000
 // The POST returns as soon as the run is queued, but the card only learns it's
@@ -201,11 +202,13 @@ function SystemCard({
   ram,
   hardware,
   sensors,
+  uptime,
 }: {
   cpu: number
   ram: number
   hardware: Hardware
   sensors: Sensors | null
+  uptime: string
 }) {
   const cpuTemp = sensors?.cpuTempC ?? null
   const fanRpm = sensors?.fanRpm ?? null
@@ -253,7 +256,15 @@ function SystemCard({
         </div>
       </div>
 
-      <div className="mt-5 border-t border-border pt-4">
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Clock className="size-4 shrink-0" aria-hidden="true" />
+          Uptime
+        </div>
+        <p className="font-mono text-xs tabular-nums text-foreground">{uptime}</p>
+      </div>
+
+      <div className="mt-4 border-t border-border pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             {onBattery ? (
@@ -747,7 +758,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
               tempC={null}
               icon={Database}
             />
-            <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} />
+            <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} uptime={data.capacity?.uptime ?? initial.uptime} />
             <NetworkCard
               network={data.rates?.network ?? null}
               speedtest={data.speedtest}
