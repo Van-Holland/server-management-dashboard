@@ -80,7 +80,7 @@ export function Constellation() {
       stars = Array.from({ length: count }, () => {
         const speed = 0.03 + Math.random() * 0.07 // px per frame: a few px per second
         const angle = Math.random() * Math.PI * 2
-        const clumped = Math.random() < 0.68
+        const clumped = Math.random() < 0.8
         const c = centres[Math.floor(Math.random() * centres.length)]
         // Mostly tiny stars, some small, a few larger: r is the visible core.
         const roll = Math.random()
@@ -113,7 +113,7 @@ export function Constellation() {
       ctx.fillStyle = haze
       ctx.fillRect(-w, -h * 2, w * 2, h * 4)
       ctx.restore()
-      ctx.lineWidth = 0.7
+      ctx.lineWidth = 0.6
       // Each linking star reaches for its (up to) 3 nearest linking neighbours; a pair
       // is drawn once however many stars pick it.
       const drawn = new Set<number>()
@@ -131,7 +131,7 @@ export function Constellation() {
           const key = i < j ? i * 1000 + j : j * 1000 + i
           if (drawn.has(key)) continue
           drawn.add(key)
-          ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.4 * 0.3})`
+          ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) ** 1.8 * 0.24})`
           ctx.beginPath()
           ctx.moveTo(s.x, s.y)
           ctx.lineTo(stars[j].x, stars[j].y)
