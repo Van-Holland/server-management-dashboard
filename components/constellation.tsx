@@ -3,8 +3,10 @@
 import { useEffect, useRef } from "react"
 
 /**
- * A slow, faint constellation behind every page: dim stars drift, close ones are
- * joined by thin lines, and the cursor (or a finger) gently draws nearby stars in.
+ * A slow, faint constellation behind every page: soft blue stars drift, close ones
+ * are joined by very thin lines, and the cursor (or a finger) gently pushes nearby
+ * stars away. The push is eased in and out and stars carry it as momentum that
+ * fades on its own, so nothing ever snaps to or jerks away from the pointer.
  * Purely visual, so it never takes a click and is hidden from screen readers.
  *
  * Kept cheap on purpose: a few dozen stars, no library, 30 fps on a phone, stopped
@@ -12,10 +14,10 @@ import { useEffect, useRef } from "react"
  * reduced motion.
  */
 
-type Star = { x: number; y: number; vx: number; vy: number; r: number; a: number; warm: boolean }
+// ox/oy is the extra velocity from the pointer's push; it decays on its own.
+type Star = { x: number; y: number; vx: number; vy: number; ox: number; oy: number; r: number; a: number }
 
-const WARM = "232, 150, 80" // the orange of the mark
-const COOL = "226, 218, 204" // warm white
+const BLUE = "128, 178, 255" // soft sky blue
 
 export function Constellation() {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -28,31 +30,62 @@ export function Constellation() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const small = window.matchMedia("(max-width: 640px)").matches
     const frameMs = small ? 1000 / 30 : 1000 / 60
-    const linkDist = small ? 95 : 130
-    const pointerRadius = small ? 110 : 150
+    const linkDist = small ? 85 : 105
+    const pointerRadius = small ? 100 : 130
 
     let w = 0
     let h = 0
     let stars: Star[] = []
-    // `target` is where the cursor really is; `x`/`y` trail it, and `power` eases
-    // between 0 and 1, so the cursor's influence fades in and out instead of snapping.
+    // tx/ty is where the pointer really is; x/y trail it, and `power` eases between
+    // 0 and 1, so the push fades in and out instead of jerking the stars.
     const pointer = { x: 0, y: 0, tx: 0, ty: 0, on: false, power: 0 }
 
     const seed = () => {
-      const count = Math.max(28, Math.min(90, Math.round((w * h) / (small ? 9000 : 13000))))
+      const count = Math.max(26, Math.min(80, Math.round((w * h) / (small ? 10000 : 15000))))
       stars = Array.from({ length: count }, () => {
-        const speed = 0.04 + Math.random() * 0.09 // px per frame: a few px per second
+        const speed = 0.03 + Math.random() * 0.07 // px per frame: a few px per second
         const angle = Math.random() * Math.PI * 2
+        const big = Math.random() < 0.15
         return {
           x: Math.random() * w,
           y: Math.random() * h,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
-          r: 0.6 + Math.random() * 0.9,
-          a: 0.25 + Math.random() * 0.4,
-          warm: Math.random() < 0.18,
+          ox: 0,
+          oy: 0,
+          r: big ? 1.5 + Math.random() * 0.8 : 0.6 + Math.random() * 0.8,
+          a: big ? 0.85 + Math.random() * 0.15 : 0.35 + Math.random() * 0.45,
         }
       })
+    }
+
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h)
+      ctx.lineWidth = 0.5
+      for (let i = 0; i < stars.length; i++) {
+        const s = stars[i]
+        for (let j = i + 1; j < stars.length; j++) {
+          const t = stars[j]
+          const d = Math.hypot(s.x - t.x, s.y - t.y)
+          if (d < linkDist) {
+            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) * 0.12})`
+            ctx.beginPath()
+            ctx.moveTo(s.x, s.y)
+            ctx.lineTo(t.x, t.y)
+            ctx.stroke()
+          }
+        }
+      }
+      for (const s of stars) {
+        // The bigger stars get a soft glow; the small ones are just dots.
+        ctx.shadowColor = `rgba(${BLUE}, 0.9)`
+        ctx.shadowBlur = s.r > 1.4 ? 8 : 0
+        ctx.fillStyle = `rgba(${BLUE}, ${s.a})`
+        ctx.beginPath()
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.shadowBlur = 0
     }
 
     const resize = () => {
@@ -68,63 +101,27 @@ export function Constellation() {
       draw()
     }
 
-    const draw = () => {
-      ctx.clearRect(0, 0, w, h)
-      for (let i = 0; i < stars.length; i++) {
-        const s = stars[i]
-        for (let j = i + 1; j < stars.length; j++) {
-          const t = stars[j]
-          const dx = s.x - t.x
-          const dy = s.y - t.y
-          const d = Math.hypot(dx, dy)
-          if (d < linkDist) {
-            ctx.strokeStyle = `rgba(${COOL}, ${(1 - d / linkDist) * 0.13})`
-            ctx.lineWidth = 0.6
-            ctx.beginPath()
-            ctx.moveTo(s.x, s.y)
-            ctx.lineTo(t.x, t.y)
-            ctx.stroke()
-          }
-        }
-        if (pointer.power > 0.01) {
-          const d = Math.hypot(s.x - pointer.x, s.y - pointer.y)
-          if (d < pointerRadius) {
-            ctx.strokeStyle = `rgba(${WARM}, ${(1 - d / pointerRadius) * 0.18 * pointer.power})`
-            ctx.lineWidth = 0.6
-            ctx.beginPath()
-            ctx.moveTo(s.x, s.y)
-            ctx.lineTo(pointer.x, pointer.y)
-            ctx.stroke()
-          }
-        }
-      }
-      for (const s of stars) {
-        ctx.fillStyle = `rgba(${s.warm ? WARM : COOL}, ${s.a})`
-        ctx.beginPath()
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
-        ctx.fill()
-      }
-    }
-
     const step = () => {
-      pointer.power += ((pointer.on ? 1 : 0) - pointer.power) * 0.03
-      pointer.x += (pointer.tx - pointer.x) * 0.05
-      pointer.y += (pointer.ty - pointer.y) * 0.05
+      pointer.power += ((pointer.on ? 1 : 0) - pointer.power) * 0.04
+      pointer.x += (pointer.tx - pointer.x) * 0.08
+      pointer.y += (pointer.ty - pointer.y) * 0.08
+
       for (const s of stars) {
         if (pointer.power > 0.01) {
-          const dx = pointer.x - s.x
-          const dy = pointer.y - s.y
+          const dx = s.x - pointer.x
+          const dy = s.y - pointer.y
           const d = Math.hypot(dx, dy)
-          // A very faint, slow pull toward the cursor; it fades to nothing at the
-          // edge of the radius and never lets a star land on the pointer.
-          if (d < pointerRadius && d > 40) {
-            const pull = (1 - d / pointerRadius) * 0.0025 * pointer.power
-            s.x += dx * pull
-            s.y += dy * pull
+          // A very soft push away from the pointer, strongest close in, zero at the edge.
+          if (d < pointerRadius && d > 0.5) {
+            const push = (1 - d / pointerRadius) ** 2 * 0.012 * pointer.power
+            s.ox += (dx / d) * push
+            s.oy += (dy / d) * push
           }
         }
-        s.x += s.vx
-        s.y += s.vy
+        s.ox *= 0.975
+        s.oy *= 0.975
+        s.x += s.vx + s.ox
+        s.y += s.vy + s.oy
         if (s.x < -10) s.x = w + 10
         else if (s.x > w + 10) s.x = -10
         if (s.y < -10) s.y = h + 10
