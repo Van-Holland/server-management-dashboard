@@ -60,6 +60,8 @@ const VHPM_LOG = `${HOST}/home/matt/vhpm-dashboard-backup.log`
 const IMMICH_LOG = `${HOST}/home/matt/immich-backup.log`
 /** Written by /home/matt/scripts/fitness-backup.sh at the end of every nightly run, including runs with nothing to back up. */
 const FITNESS_STATUS = `${HOST}/home/matt/fitness-backup-status.json`
+/** Written by /home/matt/scripts/server-config-backup.sh at the end of every nightly run (04:30), added 2026-10-20. */
+const CONFIG_STATUS = `${HOST}/home/matt/server-config-backup-status.json`
 const TIMEMACHINE = "/host/storage8tb/backups/timemachine"
 const STATUS_DIR = `${HOST}/home/matt/backup-status`
 /** Run boundaries live in a fixed-size state file, NOT in the log. readTail
@@ -455,6 +457,73 @@ async function fitnessToProton(): Promise<BackupLeg> {
 }
 
 /**
+ * The server's own settings (the "rebuild kit"): every app's settings folder with its API keys and database, the .env
+ * files, the scripts, the crontab and the SSH keys, packed nightly at 04:30 to the 8TB drive and to Proton Drive
+ * (rebuild plan step 5, IT/Projects/Linux Home Server/To-Do.md). Same heartbeat idea as the Fitness leg: the status file is
+ * written on every run, so a missing or old file means the job did not run, and `ok: false` means it ran and failed.
+ * Like every leg here, "ok" means the job RAN and the archive could be listed, not that a restore was proven (step 7).
+ */
+type ConfigStatus = {
+  ranAtIso: string
+  ok: boolean
+  localOk: boolean
+  protonOk: boolean
+  bytes: number
+  lastFile: string
+  cloudflaredIncluded: boolean
+  note: string
+}
+
+async function serverConfigBackup(): Promise<BackupLeg> {
+  let status: ConfigStatus | null = null
+  try {
+    status = JSON.parse(await readFile(CONFIG_STATUS, "utf-8")) as ConfigStatus
+  } catch {
+    status = null
+  }
+
+  const lastRunMs = status ? new Date(status.ranAtIso).getTime() : null
+  const age = hoursSince(lastRunMs)
+
+  // Nightly at 04:30, so a normal age is up to 24 h; 27 h and 36 h leave the same margin the Fitness job has.
+  let verdict = judge(age, 27, 36)
+  let note: string | null = null
+  const noteTone = "warn" as const
+
+  if (!status) {
+    verdict = "unknown"
+    note = "Status file unreadable — the job's status cannot be established either way."
+  } else if (!status.ok) {
+    verdict = "failed"
+    note = status.note
+  } else if (verdict === "overdue") {
+    note = "No run recorded since well past its 04:30 slot."
+  } else if (verdict === "late") {
+    note = "Later than its 04:30 slot but not yet alarming."
+  } else if (!status.cloudflaredIncluded) {
+    // Not a failure: the job ran. But the rebuild would not bring the websites back without this file.
+    note = "The Cloudflare tunnel login is not in the backup yet (see the rebuild plan, item 9)."
+  }
+
+  const mb = status ? `${Math.round(status.bytes / 1_048_576)} MB` : null
+
+  return {
+    id: "server-config",
+    name: "Server settings → 8TB drive and Proton Drive",
+    protects: "App settings, API keys, scripts and the job list: what a rebuilt server needs",
+    destination: "HDD: backups/server/mulderserver-config · protondrive:3. Backup/Mulderserver Config",
+    offsite: true,
+    schedule: "Nightly, 04:30",
+    lastRunMs,
+    ageHours: age,
+    verdict,
+    detail: mb ? `${mb}, ${status!.cloudflaredIncluded ? "tunnel login included" : "tunnel login not included"}` : null,
+    note,
+    noteTone,
+  }
+}
+
+/**
  * Leg 6: the Immich photo library going off-site to Proton Drive.
  *
  * This log is written by BOTH immich-backup.sh (its own `YYYY-MM-DD hh:mm:ss
@@ -765,6 +834,7 @@ export async function getBackups(): Promise<BackupsSnapshot> {
     protonToHdd(),
     vanHollandToProton(),
     fitnessToProton(),
+    serverConfigBackup(),
     immichToProton(),
     timeMachine(),
   ])

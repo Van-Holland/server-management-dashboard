@@ -97,6 +97,14 @@ const THINGS: Thing[] = [
     noOutsideCopy: "not outside the house",
   },
   {
+    // The rebuild kit. Both copies come from one job (04:30). Rebuild plan step 5/6.
+    name: "The server itself",
+    about: "App settings, API keys, scripts and the job list: what a new server needs to come back the same",
+    livesOn: "Server SSD",
+    inTheHouse: { legId: "server-config", where: "8TB drive" },
+    outside: { legId: "server-config", where: "Proton Drive" },
+  },
+  {
     name: "Portfolio Performance",
     about: "The encrypted finance files",
     livesOn: "Proton Drive",
@@ -109,8 +117,12 @@ const THINGS: Thing[] = [
  * Notes shown only in a job's opened row. Wording approved by Matthijs 2026-10-20; it
  * names no counts, so it cannot go stale.
  */
-const IF_GONE: Record<string, string> = {
-  "vault-to-github": "If Claude is gone: give any AI access to the Second Brain folder and tell it to read README.md.",
+const IF_GONE: Record<string, string[]> = {
+  "vault-to-github": ["If Claude is gone: give any AI access to the Second Brain folder and tell it to read README.md."],
+  "server-config": [
+    "Every night at 04:30 the server packs its app settings, API keys, scripts and job list into one file. One copy goes to the 8TB drive and one to Proton Drive. The last 14 are kept. Movies, music and photos are not in it. They have their own backups.",
+    "If the server dies: install Ubuntu on a new machine, give an AI SSH access, and tell it to follow the rebuild plan in the Second Brain, folder IT/Projects/Linux Home Server.",
+  ],
 }
 
 const GRID = "md:grid-cols-[1.25fr_0.85fr_1.15fr_1.15fr]"
@@ -451,7 +463,11 @@ export function JobList({ legs }: { legs: BackupLeg[] }) {
 
               <div className="px-4 pb-4 pl-11 text-sm">
                 {/* The old one-line description of each job is gone: the tiles above already say what is protected. */}
-                {IF_GONE[leg.id] && <p className="text-foreground/80">{IF_GONE[leg.id]}</p>}
+                {IF_GONE[leg.id]?.map((paragraph, i) => (
+                  <p key={i} className={`text-foreground/80 ${i > 0 ? "mt-2" : ""}`}>
+                    {paragraph}
+                  </p>
+                ))}
                 <dl className={`${IF_GONE[leg.id] ? "mt-3" : ""} grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3`}>
                   <div>
                     <dt className="text-muted-foreground">Status</dt>
