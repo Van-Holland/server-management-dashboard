@@ -65,6 +65,11 @@ export function Launcher() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
+  // Cmd on a Mac, Ctrl on Windows and Linux (the key handler below accepts both).
+  const [shortcut, setShortcut] = useState("Ctrl K")
+  useEffect(() => {
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) setShortcut("⌘ K")
+  }, [])
 
   const results = useMemo(() => search(query), [query])
 
@@ -142,7 +147,7 @@ export function Launcher() {
             setActive(0)
           }}
           onKeyDown={onInputKey}
-          placeholder="Open an app or page"
+          placeholder={`Open an app or page  ·  ${shortcut}`}
           aria-label="Open an app or page"
           role="combobox"
           aria-expanded="true"
