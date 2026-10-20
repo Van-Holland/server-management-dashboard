@@ -56,7 +56,7 @@ export function Constellation() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const small = window.matchMedia("(max-width: 640px)").matches
     const frameMs = small ? 1000 / 30 : 1000 / 60
-    const linkDist = small ? 85 : 105
+    const linkDist = small ? 115 : 150
     const pointerRadius = small ? 100 : 130
 
     const sprite = makeSprite()
@@ -74,7 +74,7 @@ export function Constellation() {
         const angle = Math.random() * Math.PI * 2
         // Mostly small stars, some medium, a few large: r is the visible core.
         const roll = Math.random()
-        const r = roll < 0.55 ? 0.5 + Math.random() * 0.45 : roll < 0.88 ? 1 + Math.random() * 0.5 : 1.8 + Math.random() * 0.5
+        const r = roll < 0.5 ? 1.3 + Math.random() * 0.5 : roll < 0.85 ? 2 + Math.random() * 0.6 : 2.8 + Math.random() * 0.5
         return {
           x: Math.random() * w,
           y: Math.random() * h,
@@ -83,7 +83,7 @@ export function Constellation() {
           ox: 0,
           oy: 0,
           r,
-          a: r > 1.7 ? 1 : 0.55 + Math.random() * 0.4,
+          a: r > 1.9 ? 1 : 0.75 + Math.random() * 0.25,
         }
       })
     }
@@ -100,14 +100,14 @@ export function Constellation() {
       ctx.fillStyle = haze
       ctx.fillRect(-w, -h * 2, w * 2, h * 4)
       ctx.restore()
-      ctx.lineWidth = 0.5
+      ctx.lineWidth = 0.8
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i]
         for (let j = i + 1; j < stars.length; j++) {
           const t = stars[j]
           const d = Math.hypot(s.x - t.x, s.y - t.y)
           if (d < linkDist) {
-            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) * 0.1})`
+            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) * 0.22})`
             ctx.beginPath()
             ctx.moveTo(s.x, s.y)
             ctx.lineTo(t.x, t.y)
