@@ -30,22 +30,17 @@ export function HeaderBar({ uptime }: { uptime: string }) {
 
   return (
     <header className="flex items-center justify-between gap-4">
-      {/* The mark and the two text lines share one height (h-11), centred on each
-          other, so the mark is no longer taller than the name beside it. */}
-      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-        <img
-          src="/logo.png"
-          alt=""
-          aria-hidden="true"
-          width={44}
-          height={44}
-          className="size-11 shrink-0 sm:size-12"
-        />
+      {/* Mark and text block are the same height (44px) and centred on each other. */}
+      <div className="flex min-w-0 items-center gap-3">
+        <img src="/logo.png" alt="" aria-hidden="true" width={44} height={44} className="size-11 shrink-0" />
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold leading-none tracking-tight text-foreground sm:text-3xl">
+          <h1
+            className="truncate text-xl leading-none tracking-tight text-foreground sm:text-[22px]"
+            style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 500 }}
+          >
             Mulderserver
           </h1>
-          <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs leading-none text-muted-foreground">
             {/* Breathing: the server is alive. It says "up", not "all is well",
                 because uptime is all this line actually knows. */}
             <span
@@ -54,28 +49,28 @@ export function HeaderBar({ uptime }: { uptime: string }) {
             />
             <span className="truncate">
               Up {uptime}
-              {/* Phone: the clock moves up here so the right side is just the search button. */}
-              <span className="sm:hidden tabular-nums"> · {shortDate}, {shortTime}</span>
+              {/* Phone: the clock moves up here so the right side is just the search icon. */}
+              <span className="tabular-nums sm:hidden"> · {shortDate}, {shortTime}</span>
             </span>
           </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-5">
-        <div className="hidden text-right sm:block">
-          <p className="text-xl font-normal tabular-nums leading-none tracking-wide text-foreground">{time}</p>
-          <p className="mt-1.5 text-sm leading-none text-muted-foreground">{date}</p>
-        </div>
+      {/* Search sits left of the clock; the clock is flush with the right edge. */}
+      <div className="flex shrink-0 items-center gap-4 sm:gap-5">
         <button
           type="button"
           onClick={openLauncher}
-          aria-label="Open anything"
-          className="inline-flex size-11 items-center justify-center gap-2 rounded-xl border border-border text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto sm:rounded-lg sm:px-3 sm:text-sm"
+          aria-label={`Search (${shortcut})`}
+          title={`Search · ${shortcut}`}
+          className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-9"
         >
-          <Search className="size-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Open anything</span>
-          <kbd className="hidden rounded border border-border px-1.5 py-0.5 text-[11px] leading-none sm:inline">{shortcut}</kbd>
+          <Search className="size-[18px]" aria-hidden="true" />
         </button>
+        <div className="hidden text-right sm:block">
+          <p className="text-lg font-normal tabular-nums leading-none text-foreground">{time}</p>
+          <p className="mt-1.5 text-xs leading-none text-muted-foreground">{date}</p>
+        </div>
       </div>
     </header>
   )

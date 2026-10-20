@@ -1,12 +1,14 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist, Geist_Mono, Rethink_Sans } from 'next/font/google'
 import './globals.css'
 import { AmbientGlow } from '@/components/ambient-glow'
 import { Launcher } from '@/components/launcher'
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
+// The machine name in the header only; everything else stays Geist.
+const rethinkSans = Rethink_Sans({ subsets: ['latin'], weight: ['500'], variable: '--font-name' })
 
 export const metadata: Metadata = {
   title: 'Mulderserver',
@@ -35,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} ${rethinkSans.variable}`}>
       <body className="bg-background font-sans antialiased">
         <AmbientGlow />
         {children}
