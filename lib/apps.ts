@@ -38,7 +38,7 @@ export const DAILY: AppEntry[] = [
   // Plain IP:port (2026-10-19): with Tailscale DNS on, the phone lost its internet,
   // so the app also answers on 3011. The HTTPS name on :8443 still works, but only
   // the IP address works with Tailscale DNS switched off.
-  { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, logo: null, tint: "#f59e0b", keywords: ["workout", "gym", "weight", "training"] },
+  { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, logo: null, tint: "#b9772a", keywords: ["workout", "gym", "weight", "training"] },
 ]
 
 /**

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type CSSProperties } from "react"
 import { X } from "lucide-react"
+import { AmbientTrigger } from "@/components/ambient-trigger"
 import { FINDERS } from "@/lib/apps"
 
 /**
@@ -51,9 +52,10 @@ export function FindersFolder({ index }: { index: number }) {
         onClick={open}
         aria-haspopup="dialog"
         title="Finders: get new films, shows and music"
-        style={{ "--tint": "#8b8f98", "--i": index } as CSSProperties}
+        style={{ "--tint": "#7c6cf0", "--i": index } as CSSProperties}
         className={`app enter group flex w-full max-w-[8.5rem] flex-col items-center gap-3 rounded-3xl p-1 ${focusRing}`}
       >
+        <AmbientTrigger />
         <span className="app-icon relative flex size-[4.75rem] items-center justify-center rounded-[22px] sm:size-24 sm:rounded-[26px]">
           {/* Three tiny logos in a two-by-two grid, like the preview on a phone folder. */}
           <span className="grid grid-cols-2 gap-1.5 sm:gap-2" aria-hidden="true">
