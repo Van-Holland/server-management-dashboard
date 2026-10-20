@@ -17,9 +17,14 @@ import { useEffect, useRef } from "react"
 // ox/oy is the extra velocity from the pointer's push; it decays on its own.
 type Star = { x: number; y: number; vx: number; vy: number; ox: number; oy: number; r: number; a: number }
 
-const BLUE = "128, 178, 255" // soft sky blue
+const BLUE = "122, 178, 255" // light sky blue
 
-/** One soft star, drawn once: a bright small core fading smoothly into a blue halo. */
+/**
+ * One star, drawn once: a crisp light-blue core (out to 42% of the sprite's radius)
+ * with only a tight, faint edge glow around it. The sprite is scaled per star so the
+ * core comes out at the star's own radius.
+ */
+const CORE = 0.42
 function makeSprite(): HTMLCanvasElement {
   const size = 64
   const sprite = document.createElement("canvas")
@@ -28,10 +33,11 @@ function makeSprite(): HTMLCanvasElement {
   const g = sprite.getContext("2d")
   if (g) {
     const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-    grad.addColorStop(0, "rgba(225, 238, 255, 1)")
-    grad.addColorStop(0.12, "rgba(170, 207, 255, 0.95)")
-    grad.addColorStop(0.3, `rgba(${BLUE}, 0.5)`)
-    grad.addColorStop(0.6, `rgba(${BLUE}, 0.16)`)
+    grad.addColorStop(0, "rgba(160, 205, 255, 1)")
+    grad.addColorStop(CORE - 0.04, `rgba(${BLUE}, 1)`)
+    grad.addColorStop(CORE + 0.04, `rgba(${BLUE}, 0.55)`)
+    grad.addColorStop(0.62, `rgba(${BLUE}, 0.16)`)
+    grad.addColorStop(0.85, `rgba(${BLUE}, 0.04)`)
     grad.addColorStop(1, `rgba(${BLUE}, 0)`)
     g.fillStyle = grad
     g.fillRect(0, 0, size, size)
@@ -62,11 +68,13 @@ export function Constellation() {
     const pointer = { x: 0, y: 0, tx: 0, ty: 0, on: false, power: 0 }
 
     const seed = () => {
-      const count = Math.max(26, Math.min(80, Math.round((w * h) / (small ? 10000 : 15000))))
+      const count = Math.max(26, Math.min(90, Math.round((w * h) / (small ? 9000 : 11000))))
       stars = Array.from({ length: count }, () => {
         const speed = 0.03 + Math.random() * 0.07 // px per frame: a few px per second
         const angle = Math.random() * Math.PI * 2
-        const big = Math.random() < 0.15
+        // Mostly small stars, some medium, a few large: r is the visible core.
+        const roll = Math.random()
+        const r = roll < 0.55 ? 0.5 + Math.random() * 0.45 : roll < 0.88 ? 1 + Math.random() * 0.5 : 1.8 + Math.random() * 0.5
         return {
           x: Math.random() * w,
           y: Math.random() * h,
@@ -74,15 +82,24 @@ export function Constellation() {
           vy: Math.sin(angle) * speed,
           ox: 0,
           oy: 0,
-          // r is the visible core; the glow around it is drawn at about 7x that.
-          r: big ? 2.2 + Math.random() * 1.2 : 1.1 + Math.random() * 1.0,
-          a: big ? 0.9 + Math.random() * 0.1 : 0.5 + Math.random() * 0.4,
+          r,
+          a: r > 1.7 ? 1 : 0.55 + Math.random() * 0.4,
         }
       })
     }
 
     const draw = () => {
       ctx.clearRect(0, 0, w, h)
+      // A barely-there cool glow in the middle of the screen, as in the reference.
+      ctx.save()
+      ctx.translate(w / 2, h / 2)
+      ctx.scale(1, 0.55)
+      const haze = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(w, h) * 0.55)
+      haze.addColorStop(0, `rgba(${BLUE}, 0.035)`)
+      haze.addColorStop(1, `rgba(${BLUE}, 0)`)
+      ctx.fillStyle = haze
+      ctx.fillRect(-w, -h * 2, w * 2, h * 4)
+      ctx.restore()
       ctx.lineWidth = 0.5
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i]
@@ -90,7 +107,7 @@ export function Constellation() {
           const t = stars[j]
           const d = Math.hypot(s.x - t.x, s.y - t.y)
           if (d < linkDist) {
-            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) * 0.12})`
+            ctx.strokeStyle = `rgba(${BLUE}, ${(1 - d / linkDist) * 0.1})`
             ctx.beginPath()
             ctx.moveTo(s.x, s.y)
             ctx.lineTo(t.x, t.y)
@@ -99,7 +116,7 @@ export function Constellation() {
         }
       }
       for (const s of stars) {
-        const d = s.r * 7.5
+        const d = (s.r * 2) / CORE
         ctx.globalAlpha = s.a
         ctx.drawImage(sprite, s.x - d / 2, s.y - d / 2, d, d)
       }
