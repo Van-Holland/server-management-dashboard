@@ -28,12 +28,12 @@ export function HeaderBar({ uptime }: { uptime: string }) {
 
   return (
     <header className="flex items-center justify-between gap-4">
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
         <img src="/logo.png" alt="" aria-hidden="true" width={36} height={36} className="size-9 shrink-0" />
         {/* The name alone, on the mark's centre line. Uptime lives in the dot's
             tooltip and in the System card, not in a second line here. */}
         <h1
-          className="truncate text-[24px] leading-none tracking-normal text-foreground/85"
+          className="truncate text-[21px] leading-none sm:text-[24px] tracking-normal text-foreground/85"
           style={{ fontFamily: "var(--font-name), var(--font-sans)", fontWeight: 400 }}
         >
           mulderserver
@@ -63,7 +63,7 @@ export function HeaderBar({ uptime }: { uptime: string }) {
       </div>
 
       {/* Search sits left of the clock; the clock is flush with the right edge. */}
-      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-5">
         <button
           type="button"
           onClick={openLauncher}
@@ -74,7 +74,7 @@ export function HeaderBar({ uptime }: { uptime: string }) {
           <Search className="size-[18px]" aria-hidden="true" />
         </button>
         {/* Phone: just the time. Larger screens: seconds and the full date. */}
-        <p className="text-base tabular-nums text-foreground sm:hidden">{shortTime}</p>
+        <p className="text-[15px] tabular-nums text-foreground sm:hidden">{shortTime}</p>
         <div className="hidden text-right sm:block">
           <p className="text-lg font-normal tabular-nums leading-none text-foreground">{time}</p>
           <p className="mt-1.5 text-xs leading-none text-muted-foreground">{date}</p>
