@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Rethink_Sans } from 'next/font/google'
 import './globals.css'
 import { AmbientGlow } from '@/components/ambient-glow'
+import { Constellation } from '@/components/constellation'
 import { Launcher } from '@/components/launcher'
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
@@ -39,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} ${rethinkSans.variable}`}>
       <body className="bg-background font-sans antialiased">
+        <Constellation />
         <AmbientGlow />
         {children}
         <Launcher />
