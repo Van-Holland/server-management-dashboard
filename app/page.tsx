@@ -7,7 +7,8 @@ import { HealthBanner } from "@/components/health-banner"
 import { MaintenanceNote } from "@/components/maintenance-note"
 import { getBackups } from "@/lib/backups"
 import { getHardware } from "@/lib/hardware"
-import { getHealthWarnings } from "@/lib/health"
+import { getHealthSnapshot } from "@/lib/health"
+import { buildChecks, summarize } from "@/lib/health-checks"
 import { getMediaSummary } from "@/lib/media"
 import { getSystemStats } from "@/lib/system-stats"
 
@@ -18,15 +19,16 @@ export const dynamic = "force-dynamic"
 export default async function HomePage() {
   // Backups read a handful of small log files, so they cost little and are
   // fetched alongside the system stats rather than serially after them.
-  const [stats, backups, warnings, hardware, media] = await Promise.all([
+  const [stats, backups, snapshot, hardware, media] = await Promise.all([
     getSystemStats(),
     getBackups(),
-    getHealthWarnings(),
+    getHealthSnapshot(),
     getHardware(),
     getMediaSummary(),
   ])
 
   // Two levels: red needs action today, maintenance needs action this week. A failed or overdue backup is a red one.
+  const warnings = snapshot.warnings
   const alerts = warnings.filter((w) => w.level !== "maintenance")
   const maintenance = warnings.filter((w) => w.level === "maintenance")
   if (backups.worst === "failed" || backups.worst === "overdue") {
@@ -44,7 +46,7 @@ export default async function HomePage() {
             server is doing, then the tools (the arr stack and the downloaders). */}
         <DailyApps />
         <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} uptime={stats.uptime}>
-          <ServerPages media={media} backups={backups} />
+          <ServerPages media={media} backups={backups} health={summarize(buildChecks(snapshot, backups))} />
         </StatsCards>
         <ToolsSection />
       </div>

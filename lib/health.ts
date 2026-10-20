@@ -21,7 +21,7 @@
  * written to catch.
  */
 
-import { getHostWarnings } from "@/lib/health-probe"
+import { getHostData, warningsFromHost, type HostData } from "@/lib/health-probe"
 
 export type HealthWarning = {
   id: string
@@ -148,34 +148,47 @@ async function getJson<T>(url: string, headers?: Record<string, string>): Promis
   return (await res.json()) as T
 }
 
-async function checkQbit(): Promise<HealthWarning[]> {
+type QbitState = { reachable: boolean; port: number | null; iface: string | null }
+
+async function checkQbit(): Promise<{ warnings: HealthWarning[]; state: QbitState }> {
   try {
     const [prefs, transfer] = await Promise.all([
       getJson<QbitPrefs>(`${QBIT_URL}/api/v2/app/preferences`),
       getJson<QbitTransfer>(`${QBIT_URL}/api/v2/transfer/info`),
     ])
-    return evaluateQbit(prefs, transfer)
+    return {
+      warnings: evaluateQbit(prefs, transfer),
+      state: { reachable: true, port: prefs.listen_port ?? null, iface: prefs.current_network_interface ?? null },
+    }
   } catch (err) {
-    return [
-      {
-        id: "qbit-unreachable",
-        title: "Cannot reach qBittorrent",
-        detail: `The dashboard could not read it (${err instanceof Error ? err.message : "no answer"}). It may be down, or its login whitelist changed.`,
-      },
-    ]
+    return {
+      warnings: [
+        {
+          id: "qbit-unreachable",
+          title: "Cannot reach qBittorrent",
+          detail: `The dashboard could not read it (${err instanceof Error ? err.message : "no answer"}). It may be down, or its login whitelist changed.`,
+        },
+      ],
+      state: { reachable: false, port: null, iface: null },
+    }
   }
 }
 
-async function checkProwlarr(): Promise<HealthWarning[]> {
+export type IndexerState = { name: string; ok: boolean }
+
+async function checkProwlarr(): Promise<{ warnings: HealthWarning[]; indexers: IndexerState[] | null }> {
   const key = process.env.PROWLARR_API_KEY
   if (!key) {
-    return [
-      {
-        id: "prowlarr-no-key",
-        title: "Indexer check is not set up",
-        detail: "PROWLARR_API_KEY is missing from the dashboard's .env, so a switched-off indexer would go unnoticed.",
-      },
-    ]
+    return {
+      warnings: [
+        {
+          id: "prowlarr-no-key",
+          title: "Indexer check is not set up",
+          detail: "PROWLARR_API_KEY is missing from the dashboard's .env, so a switched-off indexer would go unnoticed.",
+        },
+      ],
+      indexers: null,
+    }
   }
   try {
     const headers = { "X-Api-Key": key }
@@ -183,27 +196,36 @@ async function checkProwlarr(): Promise<HealthWarning[]> {
       getJson<IndexerStatus[]>(`${PROWLARR_URL}/api/v1/indexerstatus`, headers),
       getJson<{ id: number; name: string }[]>(`${PROWLARR_URL}/api/v1/indexer`, headers),
     ])
-    return evaluateIndexers(statuses, new Map(indexers.map((i) => [i.id, i.name])), Date.now())
+    const now = Date.now()
+    const off = new Set(statuses.filter((s) => s.disabledTill && Date.parse(s.disabledTill) > now).map((s) => s.indexerId))
+    return {
+      warnings: evaluateIndexers(statuses, new Map(indexers.map((i) => [i.id, i.name])), now),
+      indexers: indexers.map((i) => ({ name: i.name, ok: !off.has(i.id) })),
+    }
   } catch (err) {
-    return [
-      {
-        id: "prowlarr-unreachable",
-        title: "Cannot reach Prowlarr",
-        detail: `The dashboard could not read it (${err instanceof Error ? err.message : "no answer"}), so indexer problems would go unnoticed.`,
-      },
-    ]
+    return {
+      warnings: [
+        {
+          id: "prowlarr-unreachable",
+          title: "Cannot reach Prowlarr",
+          detail: `The dashboard could not read it (${err instanceof Error ? err.message : "no answer"}), so indexer problems would go unnoticed.`,
+        },
+      ],
+      indexers: null,
+    }
   }
 }
 
-type QbitWatch = { warnings: HealthWarning[]; badSince: number | null; started: boolean }
+type QbitWatch = { warnings: HealthWarning[]; state: QbitState | null; badSince: number | null; started: boolean }
 
 // On globalThis so a hot reload in development cannot start a second timer.
 const globalWatch = globalThis as typeof globalThis & { __qbitWatch?: QbitWatch }
-const qbitWatch: QbitWatch = (globalWatch.__qbitWatch ??= { warnings: [], badSince: null, started: false })
+const qbitWatch: QbitWatch = (globalWatch.__qbitWatch ??= { warnings: [], state: null, badSince: null, started: false })
 
 async function pollQbit(): Promise<void> {
-  const warnings = await checkQbit()
+  const { warnings, state } = await checkQbit()
   qbitWatch.warnings = warnings
+  qbitWatch.state = state
   if (warnings.length === 0) qbitWatch.badSince = null
   else if (qbitWatch.badSince === null) qbitWatch.badSince = Date.now()
 }
@@ -221,10 +243,30 @@ function qbitWarningsPastGrace(): HealthWarning[] {
   return Date.now() - qbitWatch.badSince >= QBIT_GRACE_MS ? qbitWatch.warnings : []
 }
 
-export async function getHealthWarnings(): Promise<HealthWarning[]> {
+/** Everything the health box, the Health card and the Health page read, gathered once so they can never disagree. */
+export type HealthSnapshot = {
+  warnings: HealthWarning[]
+  qbit: QbitState | null
+  indexers: IndexerState[] | null
+  host: HostData
+  checkedMs: number
+}
+
+export async function getHealthSnapshot(): Promise<HealthSnapshot> {
   ensureQbitWatcher()
   // Until the watcher's first poll lands (right after a restart) there is nothing
   // to report; the first real answer arrives within a few seconds.
-  const [indexers, host] = await Promise.all([checkProwlarr(), getHostWarnings()])
-  return [...qbitWarningsPastGrace(), ...indexers, ...host]
+  const [prowlarr, host] = await Promise.all([checkProwlarr(), getHostData()])
+  const nowMs = Date.now()
+  return {
+    warnings: [...qbitWarningsPastGrace(), ...prowlarr.warnings, ...warningsFromHost(host, nowMs)],
+    qbit: qbitWatch.state,
+    indexers: prowlarr.indexers,
+    host,
+    checkedMs: nowMs,
+  }
+}
+
+export async function getHealthWarnings(): Promise<HealthWarning[]> {
+  return (await getHealthSnapshot()).warnings
 }

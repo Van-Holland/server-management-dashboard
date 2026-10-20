@@ -39,7 +39,7 @@ export type ProbeStatus = {
   vpn: { exitIp: string | null; checked: boolean; leak: boolean }
   apps: Named[]
   sites: Named[]
-  containers: { unhealthy: string[]; restarting: string[] }
+  containers: { running?: number; unhealthy: string[]; restarting: string[] }
   disks: Record<string, { usedPct: number; mount: string }>
   battery: { onBattery: boolean; sinceIso: string | null }
   arr: Record<string, ArrItem[] | null>
@@ -48,7 +48,7 @@ export type ProbeStatus = {
   host: { rebootRequired: boolean; rebootPkgs: string; updatesPending: number | null; uptimeDays: number }
 }
 
-type WatchdogStatus = { ranAtIso: string; state: string; badSinceIso: string; lastRestartIso: string; dryRun: boolean }
+export type WatchdogStatus = { ranAtIso: string; state: string; badSinceIso: string; lastRestartIso: string; dryRun: boolean }
 
 const alert = (id: string, title: string, detail: string): HealthWarning => ({ id, title, detail, level: "alert" })
 const maint = (id: string, title: string, detail: string): HealthWarning => ({ id, title, detail, level: "maintenance" })
@@ -189,7 +189,7 @@ export function evaluateWatchdog(w: WatchdogStatus, nowMs: number): HealthWarnin
 }
 
 type SmartAttr = { id: number; name: string; raw: { value: number } }
-type SmartJson = {
+export type SmartJson = {
   smart_status?: { passed?: boolean }
   temperature?: { current?: number }
   local_time?: { time_t?: number }
@@ -249,37 +249,48 @@ async function readJson<T>(path: string): Promise<T | null> {
   }
 }
 
-export async function getHostWarnings(): Promise<HealthWarning[]> {
-  const nowMs = Date.now()
-  const [probe, watchdog, hdd, nvme] = await Promise.all([
+export type HostData = {
+  probe: ProbeStatus | null
+  watchdog: WatchdogStatus | null
+  hdd: SmartJson | null
+  nvme: SmartJson | null
+  smartDirExists: boolean
+}
+
+/** Reads the four files the server's jobs write. Judging them is `warningsFromHost`, so the Health page can show the raw facts too. */
+export async function getHostData(): Promise<HostData> {
+  const [probe, watchdog, hdd, nvme, smartDirExists] = await Promise.all([
     readJson<ProbeStatus>(PROBE_FILE),
     readJson<WatchdogStatus>(WATCHDOG_FILE),
     readJson<SmartJson>(SMART_HDD),
     readJson<SmartJson>(SMART_NVME),
+    stat(`${HOST}/var/lib/mulderserver-health`).then(() => true).catch(() => false),
   ])
+  return { probe, watchdog, hdd, nvme, smartDirExists }
+}
+
+export function warningsFromHost(d: HostData, nowMs: number): HealthWarning[] {
   const out: HealthWarning[] = []
-  if (!probe) {
+  if (!d.probe) {
     out.push(alert("probe-missing", "The server's health check is not running", "No status file from health-probe.py. Check the cron job on mulderserver (every 5 minutes)."))
   } else {
-    out.push(...evaluateProbe(probe, nowMs))
+    out.push(...evaluateProbe(d.probe, nowMs))
   }
-  if (watchdog) out.push(...evaluateWatchdog(watchdog, nowMs))
-  if (!hdd && !nvme) {
-    // Distinguish "not set up yet" from "set up and working" without a stat storm: one stat is enough.
-    const exists = await stat(`${HOST}/var/lib/mulderserver-health`).then(() => true).catch(() => false)
+  if (d.watchdog) out.push(...evaluateWatchdog(d.watchdog, nowMs))
+  if (!d.hdd && !d.nvme) {
     out.push(
       maint(
         "smart-not-set-up",
         "Drive health is not monitored yet",
-        exists
+        d.smartDirExists
           ? "The SMART files are missing. Check the root cron job /etc/cron.d/mulderserver-smart."
           : "smartmontools and its root cron job are not set up. The 8TB drive holds the only copy of your media; see the Linux Home Server to-do.",
       ),
     )
   } else {
-    if (hdd) out.push(...evaluateSmart("hdd", hdd, nowMs))
+    if (d.hdd) out.push(...evaluateSmart("hdd", d.hdd, nowMs))
     else out.push(maint("smart-hdd-missing", "The 8TB drive's health reading is missing", "Check the root cron job /etc/cron.d/mulderserver-smart."))
-    if (nvme) out.push(...evaluateSmart("nvme", nvme, nowMs))
+    if (d.nvme) out.push(...evaluateSmart("nvme", d.nvme, nowMs))
   }
   return out
 }
