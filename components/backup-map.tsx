@@ -1,6 +1,6 @@
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Cloud, HardDrive, House, Laptop, Server, Shield, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import type { BackupLeg } from "@/lib/backups"
+import type { BackupLeg, BackupVerdict } from "@/lib/backups"
 import { formatAge, verdictStyle } from "@/components/backup-status"
 
 /**
@@ -19,6 +19,8 @@ import { formatAge, verdictStyle } from "@/components/backup-status"
 type Copy = {
   /** The job that makes this copy. Absent when the place IS where the thing lives. */
   legId?: string
+  /** For a job that writes two copies: which half this cell is. A failed Proton upload must not turn the 8TB cell red. */
+  part?: "local" | "proton"
   /** Where the copy is kept, in plain words. */
   where: string
   /** Overrides the leg's own schedule text when that is a long sentence. */
@@ -77,16 +79,15 @@ const THINGS: Thing[] = [
     name: "Tenant files",
     about: "Van Holland Property Management",
     livesOn: "Server SSD",
-    inTheHouse: null,
-    noHouseCopy: "only on the server SSD",
+    inTheHouse: { legId: "vanholland-to-hdd", where: "8TB drive" },
     outside: { legId: "vanholland-to-proton", where: "Proton Drive" },
   },
   {
     name: "Fitness data",
     about: "Workouts and weigh-ins",
     livesOn: "Server SSD",
-    inTheHouse: { legId: "fitness-to-proton", where: "8TB drive" },
-    outside: { legId: "fitness-to-proton", where: "Proton Drive" },
+    inTheHouse: { legId: "fitness-to-proton", part: "local", where: "8TB drive" },
+    outside: { legId: "fitness-to-proton", part: "proton", where: "Proton Drive" },
   },
   {
     name: "The MacBook",
@@ -101,8 +102,8 @@ const THINGS: Thing[] = [
     name: "Mulderserver",
     about: "Everything needed to rebuild the server exactly how it is now on new hardware fully automatic with AI.",
     livesOn: "Server SSD",
-    inTheHouse: { legId: "server-config", where: "8TB drive" },
-    outside: { legId: "server-config", where: "Proton Drive" },
+    inTheHouse: { legId: "server-config", part: "local", where: "8TB drive" },
+    outside: { legId: "server-config", part: "proton", where: "Proton Drive" },
   },
   {
     name: "Portfolio Performance",
@@ -191,8 +192,9 @@ function CopyCell({
   }
 
   const leg = legs.get(copy.legId)
-  const style = verdictStyle(leg?.verdict ?? "unknown")
-  const attention = leg !== undefined && leg.verdict !== "ok"
+  const verdict = verdictFor(copy, leg)
+  const style = verdictStyle(verdict)
+  const attention = leg !== undefined && verdict !== "ok"
   const when = copy.when ?? (leg ? shortSchedule(leg.schedule) : "")
 
   return (
@@ -218,16 +220,23 @@ function CopyCell({
 }
 
 /** What one copy looks like to a reader: missing, just "the originals", or a job's verdict. */
+function verdictFor(copy: Copy, leg: BackupLeg | undefined): BackupVerdict {
+  if (!leg) return "unknown"
+  if (leg.verdict === "failed" && copy.part && leg.parts?.[copy.part]) return "ok"
+  return leg.verdict
+}
+
 type CopyState =
   | { kind: "none" }
   | { kind: "static" }
-  | { kind: "leg"; leg: BackupLeg | undefined; attention: boolean }
+  | { kind: "leg"; leg: BackupLeg | undefined; verdict: BackupVerdict; attention: boolean }
 
 function copyState(copy: Copy | null, legs: Map<string, BackupLeg>): CopyState {
   if (copy === null) return { kind: "none" }
   if (copy.legId === undefined) return { kind: "static" }
   const leg = legs.get(copy.legId)
-  return { kind: "leg", leg, attention: leg === undefined || leg.verdict !== "ok" }
+  const verdict = verdictFor(copy, leg)
+  return { kind: "leg", leg, verdict, attention: leg === undefined || verdict !== "ok" }
 }
 
 /** The small house or cloud badge on a closed phone row: the icon says which copy, the mark says how it is. */
@@ -244,7 +253,7 @@ function CopyPill({ icon: Icon, state, label }: { icon: LucideIcon; state: CopyS
       </span>
     )
   }
-  const style = verdictStyle(state.kind === "leg" ? (state.leg?.verdict ?? "unknown") : "unknown")
+  const style = verdictStyle(state.kind === "leg" ? state.verdict : "unknown")
   const bad = state.kind === "leg" && state.attention
   return (
     <span
@@ -294,7 +303,7 @@ function CopyLine({
       </>
     )
   } else {
-    const style = verdictStyle(state.leg?.verdict ?? "unknown")
+    const style = verdictStyle(state.verdict)
     const when = copy.when ?? (state.leg ? shortSchedule(state.leg.schedule) : "")
     body = (
       <>

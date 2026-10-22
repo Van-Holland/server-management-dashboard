@@ -30,6 +30,8 @@ export type BackupLeg = {
   lastRunMs: number | null
   ageHours: number | null
   verdict: BackupVerdict
+  /** Jobs that write two copies report each half, so the map can colour each cell by its own half (2026-10-22). */
+  parts?: { local: boolean; proton: boolean }
   /** Short result line from the job itself, e.g. "49 files, 10.541 MiB". */
   detail: string | null
   /** Why the verdict is what it is — always populated for anything but "ok". */
@@ -59,6 +61,7 @@ const RCLONE_LOG = `${HOST}/home/matt/rclone-backup.log`
 const VHPM_LOG = `${HOST}/home/matt/vhpm-dashboard-backup.log`
 const IMMICH_LOG = `${HOST}/home/matt/immich-backup.log`
 /** Written by /home/matt/scripts/fitness-backup.sh at the end of every nightly run, including runs with nothing to back up. */
+const VHPM_LOCAL_STATUS = `${HOST}/home/matt/vhpm-local-backup-status.json`
 const FITNESS_STATUS = `${HOST}/home/matt/fitness-backup-status.json`
 /** Written by /home/matt/scripts/server-config-backup.sh at the end of every nightly run (04:30), added 2026-10-20. */
 const CONFIG_STATUS = `${HOST}/home/matt/server-config-backup-status.json`
@@ -397,6 +400,49 @@ async function vanHollandToProton(): Promise<BackupLeg> {
 }
 
 /**
+ * The tenant files' second copy on the 8TB drive (added 2026-10-22). It runs at 01:55 straight from cron and needs no
+ * internet, so a night without internet no longer means a night without a second copy. Same heartbeat idea as the
+ * Fitness leg: a status file on every run, `ok: false` means it ran and failed.
+ */
+async function vanHollandToHdd(): Promise<BackupLeg> {
+  let status: { ranAtIso: string; ok: boolean; note: string } | null = null
+  try {
+    status = JSON.parse(await readFile(VHPM_LOCAL_STATUS, "utf-8"))
+  } catch {
+    status = null
+  }
+  const lastRunMs = status ? new Date(status.ranAtIso).getTime() : null
+  const age = hoursSince(lastRunMs)
+  let verdict = judge(age, 27, 36)
+  let note: string | null = null
+  if (!status) {
+    verdict = "unknown"
+    note = "Status file unreadable — the job's status cannot be established either way."
+  } else if (!status.ok) {
+    verdict = "failed"
+    note = status.note
+  } else if (verdict === "overdue") {
+    note = "No run recorded since well past its 01:55 slot."
+  } else if (verdict === "late") {
+    note = "Later than its 01:55 slot but not yet alarming."
+  }
+  return {
+    id: "vanholland-to-hdd",
+    name: "Van Holland Property Management → 8TB drive",
+    protects: "Tenant documents and the dashboard database",
+    destination: "HDD: backups/server/vhpm-dashboard",
+    offsite: false,
+    schedule: "Nightly, 01:55",
+    lastRunMs,
+    ageHours: age,
+    verdict,
+    detail: status?.ok ? status.note : null,
+    note,
+    noteTone: "warn",
+  }
+}
+
+/**
  * The Fitness Tracker database: nightly to the HDD and to Proton Drive (added 2026-10-19).
  * The script writes a small status file on every run, even when nothing changed, so the file's age is the heartbeat:
  * a missing or old file means the job did not run, and `ok: false` means it ran and something failed.
@@ -450,6 +496,7 @@ async function fitnessToProton(): Promise<BackupLeg> {
     lastRunMs,
     ageHours: age,
     verdict,
+    parts: status ? { local: status.localOk, proton: status.protonOk } : undefined,
     detail: status ? `${status.sessions} workouts, ${status.bodyEntries} weigh-ins` : null,
     note,
     noteTone: "warn",
@@ -517,6 +564,7 @@ async function serverConfigBackup(): Promise<BackupLeg> {
     lastRunMs,
     ageHours: age,
     verdict,
+    parts: status ? { local: status.localOk, proton: status.protonOk } : undefined,
     detail: mb ? `${mb}, ${status!.cloudflaredIncluded ? "tunnel login included" : "tunnel login not included"}` : null,
     note,
     noteTone,
@@ -833,6 +881,7 @@ export async function getBackups(): Promise<BackupsSnapshot> {
   const settled = await Promise.allSettled([
     protonToHdd(),
     vanHollandToProton(),
+    vanHollandToHdd(),
     fitnessToProton(),
     serverConfigBackup(),
     immichToProton(),
