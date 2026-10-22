@@ -344,7 +344,7 @@ const CATALOGUE: Entry[] = [
     has: (c) => !!c.s.host.proton,
     ok: (c) => {
       const u = c.s.host.proton
-      return u ? `${Math.round((100 * u.usedBytes) / u.totalBytes)}% used, ${((u.totalBytes - u.usedBytes) / 1e9).toFixed(0)} GB free` : "Fine"
+      return u ? `${Math.round((100 * u.usedBytes) / u.totalBytes)}% used, ${((u.totalBytes - u.usedBytes) / 2 ** 30).toFixed(0)} GB free` : "Fine"
     },
   },
   {

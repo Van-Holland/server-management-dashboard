@@ -125,8 +125,9 @@ function CardShell({
 
 /** The Proton Drive account: the third place the data lives, next to the SSD and the 8TB drive. The number is read hourly. */
 function ProtonCard({ proton }: { proton: ProtonUsage | null }) {
-  const totalGb = proton ? Math.round(proton.totalBytes / 1e9) : 0
-  const usedGb = proton ? Math.round(proton.usedBytes / 1e9) : 0
+  // Proton's own app counts in binary units (1 GB = 2^30 bytes), so this card does too; the SSD and HDD cards are decimal.
+  const totalGb = proton ? Math.round(proton.totalBytes / 2 ** 30) : 0
+  const usedGb = proton ? Math.round((proton.usedBytes / 2 ** 30) * 100) / 100 : 0
   const pct = proton ? Math.min(100, Math.round((100 * proton.usedBytes) / proton.totalBytes)) : 0
   const ageH = proton ? Math.floor((Date.now() - Date.parse(proton.checkedAtIso)) / 3600000) : 0
   return (
@@ -158,7 +159,7 @@ function ProtonCard({ proton }: { proton: ProtonUsage | null }) {
         <ProgressBar pct={pct} label="Proton Drive usage" color={usageColor(pct)} />
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        {proton ? `${formatSize(totalGb - usedGb)} free · whole account, read ${ageH < 1 ? "this hour" : `${ageH} h ago`}` : "Read once an hour"}
+        {proton ? `${formatSize(Math.round((totalGb - usedGb) * 10) / 10)} free · whole account, read ${ageH < 1 ? "this hour" : `${ageH} h ago`}` : "Read once an hour"}
       </p>
     </div>
   )

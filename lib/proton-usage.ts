@@ -27,7 +27,8 @@ export async function getProtonUsage(): Promise<ProtonUsage | null> {
 
 export const protonPct = (u: ProtonUsage) => Math.round((100 * u.usedBytes) / u.totalBytes)
 
-const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`
+// binary units, to match what the Proton app shows
+const gb = (bytes: number) => `${(bytes / 2 ** 30).toFixed(1)} GB`
 
 export function evaluateProtonUsage(u: ProtonUsage | null, nowMs: number): HealthWarning[] {
   if (!u) {
