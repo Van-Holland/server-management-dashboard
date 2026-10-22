@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import {
   Activity,
   ArrowDown,
@@ -598,63 +598,69 @@ function Sparkline({ values, floor, stroke, label }: { values: number[]; floor: 
   )
 }
 
+/** One tile of the "happening now" row: a title, a headline, one quiet line, and whatever visual fits. */
 function SummaryCell({
   label,
   value,
-  pct,
-  color,
+  sub,
   valueClass = "text-foreground",
   index,
-  spark,
-  sub,
+  children,
 }: {
   label: string
   value: string
-  /** One quiet line of context under the headline. */
   sub?: string
-  pct?: number | null
-  color?: string
   valueClass?: string
   /** Position in the entrance sequence (apps come first, then these). */
   index: number
-  /** A sparkline shown instead of a bar. */
-  spark?: React.ReactNode
+  children?: React.ReactNode
 }) {
   return (
     <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 truncate whitespace-nowrap text-[13px] font-medium tabular-nums sm:text-sm ${valueClass}`}>{value}</p>
-      <p className="mt-0.5 h-4 truncate text-xs text-muted-foreground">{sub}</p>
-      {/* Fixed height so every cell lines up, whatever it shows underneath. */}
-      <div className="mt-2 flex h-6 items-end">
-        {spark ?? (pct !== null && pct !== undefined && (
-          <div className="w-full pb-0.5">
-            <ProgressBar pct={pct} label={`${label} level`} color={color} size="sm" />
-          </div>
-        ))}
-      </div>
+      {sub !== undefined && <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p>}
+      {children}
     </div>
   )
 }
 
-/** The Storage strip under the summary tiles: capacity, so bars. HDD, SSD and Proton side by side, one short row. */
-function StorageCell({ rows, index }: { rows: { name: string; pct: number | null; size: string }[]; index: number }) {
+/** One labelled bar with its percent: the shared look of the System and Storage tiles. */
+function MiniBar({ name, pct, hint }: { name: string; pct: number | null; hint?: string }) {
   return (
-    <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
+    <div className="flex h-5 items-center gap-2 text-xs" title={hint}>
+      <span className="w-12 shrink-0 font-medium text-foreground">{name}</span>
+      <div className="min-w-0 flex-1">
+        <ProgressBar pct={pct ?? 0} label={`${name} usage`} color={usageColor(pct ?? 0)} size="sm" />
+      </div>
+      <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{pct === null ? "—" : `${pct}%`}</span>
+    </div>
+  )
+}
+
+type StorageData = { ssd: DiskStats; hdd: DiskStats; proton: ProtonUsage | null }
+const StorageContext = createContext<StorageData | null>(null)
+
+/**
+ * The Storage tile. It sits in the row of "what you keep" cards (Media library, Backups, Health), which the page builds on the
+ * server, so it reads the live numbers from the context LiveCards provides instead of taking props.
+ */
+export function StorageTile() {
+  const d = useContext(StorageContext)
+  if (!d) return null
+  const pct = (disk: DiskStats) => (disk.totalGb > 0 ? Math.round((100 * disk.usedGb) / disk.totalGb) : 0)
+  const protonPct = d.proton ? Math.round((100 * d.proton.usedBytes) / d.proton.totalBytes) : null
+  return (
+    <div className="panel enter rounded-[14px] px-4 py-3" style={{ "--i": 10 } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">Storage</p>
-      <div className="mt-2 grid grid-cols-3 gap-4 sm:gap-6">
-        {rows.map((r) => (
-          <div key={r.name} className="min-w-0">
-            <div className="flex items-baseline justify-between gap-2 text-[13px] tabular-nums sm:text-sm">
-              <span className="font-medium text-foreground">{r.name}</span>
-              <span className="font-medium text-foreground">{r.pct === null ? "—" : `${r.pct}%`}</span>
-            </div>
-            <div className="mt-1.5">
-              <ProgressBar pct={r.pct ?? 0} label={`${r.name} usage`} color={usageColor(r.pct ?? 0)} size="sm" />
-            </div>
-            <p className="mt-1 hidden h-4 truncate text-xs tabular-nums text-muted-foreground sm:block">{r.size}</p>
-          </div>
-        ))}
+      <div className="mt-1">
+        <MiniBar name="HDD" pct={pct(d.hdd)} hint={`${formatSize(d.hdd.usedGb)} / ${formatSize(d.hdd.totalGb)}`} />
+        <MiniBar name="SSD" pct={pct(d.ssd)} hint={`${formatSize(d.ssd.usedGb)} / ${formatSize(d.ssd.totalGb)}`} />
+        <MiniBar
+          name="Proton"
+          pct={protonPct}
+          hint={d.proton ? `${formatSize(Math.round((d.proton.usedBytes / 2 ** 30) * 100) / 100)} / ${formatSize(Math.round(d.proton.totalBytes / 2 ** 30))}` : undefined}
+        />
       </div>
     </div>
   )
@@ -663,37 +669,22 @@ function StorageCell({ rows, index }: { rows: { name: string; pct: number | null
 function ServerSummary({
   cpu,
   ram,
-  uptime,
-  ssd,
-  hdd,
   data,
   history,
 }: {
   cpu: number
   ram: number
-  uptime: string
-  ssd: DiskStats
-  hdd: DiskStats
   data: LiveData
   history: History
 }) {
-  const percent = (disk: DiskStats) => (disk.totalGb > 0 ? Math.round((100 * disk.usedGb) / disk.totalGb) : 0)
-  const ssdPct = percent(ssd)
-  const hddPct = percent(hdd)
-  const protonPctNow = data.proton ? Math.round((100 * data.proton.usedBytes) / data.proton.totalBytes) : null
-  const protonGb = (bytes: number) => Math.round((bytes / 2 ** 30) * 100) / 100 // Proton's app counts in binary units
-
   const cpuTemp = data.sensors?.cpuTempC ?? null
   const onBattery = data.sensors?.power.onAc === false
-  const systemValue = onBattery
-    ? "On battery, mains lost"
-    : `${cpu}% CPU${cpuTemp === null ? "" : `, ${cpuTemp}°C`}`
   const systemHot = onBattery || (cpuTemp !== null && cpuTemp >= 80)
 
   const network = data.rates?.network ?? null
   const downloads = data.downloads
   const active = downloads?.items ?? []
-
+  const top = active[0]
   const internetText =
     data.internet?.state === "down" ? "internet down" : data.internet?.state === "stale" ? "watcher stopped" : data.internet ? "internet up" : null
   const upText = network ? `↑ ${formatSpeed(network.txBytesPerSec)}` : null
@@ -703,57 +694,41 @@ function ServerSummary({
       <SummaryCell
         index={5}
         label="System"
-        value={systemValue}
+        value={onBattery ? "On battery, mains lost" : cpuTemp === null ? "Running" : `${cpuTemp}°C`}
         valueClass={systemHot ? "text-usage-high" : "text-foreground"}
-        sub={`RAM ${ram}% · up ${uptime}`}
-        spark={
-          <Sparkline
-            values={history.cpu}
-            floor={10}
-            label="CPU load over the last minute"
-            stroke={cpu > 85 ? "var(--usage-high)" : cpu >= 60 ? "var(--usage-mid)" : "var(--usage-low)"}
-          />
-        }
-      />
+      >
+        <div className="mt-2">
+          <MiniBar name="CPU" pct={cpu} />
+          <MiniBar name="RAM" pct={ram} />
+        </div>
+      </SummaryCell>
       <SummaryCell
         index={6}
         label="Network"
         value={network ? `${formatSpeed(network.rxBytesPerSec)} down` : "—"}
         sub={[upText, internetText].filter(Boolean).join(" · ")}
-        spark={
+      >
+        <div className="mt-2 flex h-6 items-end">
           <Sparkline values={history.rx} floor={100_000} label="Download speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
-        }
-      />
+        </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">download, last minute</p>
+      </SummaryCell>
       <div className="col-span-2 sm:col-span-1 [&>*]:h-full">
         <SummaryCell
           index={7}
           label="Downloads"
-          value={
-            downloads === null
-              ? "—"
-              : active.length === 0
-                ? "Idle"
-                : `${active.length} active, ${formatSpeed(downloads.totalBytesPerSec)}`
-          }
-          sub={downloads === null ? undefined : active.length === 0 ? "Queue empty" : active[0].name}
-          spark={
-            <Sparkline values={history.dl} floor={1_000_000} label="Download queue speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
-          }
-        />
-      </div>
-      <div className="col-span-2 sm:col-span-3">
-        <StorageCell
-          index={8}
-          rows={[
-            { name: "HDD", pct: hddPct, size: `${formatSize(hdd.usedGb)} / ${formatSize(hdd.totalGb)}` },
-            { name: "SSD", pct: ssdPct, size: `${formatSize(ssd.usedGb)} / ${formatSize(ssd.totalGb)}` },
-            {
-              name: "Proton",
-              pct: protonPctNow,
-              size: data.proton ? `${formatSize(protonGb(data.proton.usedBytes))} / ${formatSize(Math.round(data.proton.totalBytes / 2 ** 30))}` : "",
-            },
-          ]}
-        />
+          value={downloads === null ? "—" : top ? `${active.length} active, ${formatSpeed(downloads.totalBytesPerSec)}` : "Idle"}
+          sub={downloads === null ? undefined : top ? top.name : "Queue empty"}
+        >
+          {top && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <div className="min-w-0 flex-1">
+                <ProgressBar pct={top.progress} label={`${top.name} progress`} size="sm" />
+              </div>
+              <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{Math.round(top.progress)}%</span>
+            </div>
+          )}
+        </SummaryCell>
       </div>
     </div>
   )
@@ -890,7 +865,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
           cards in, so nothing jumps; `inert` keeps the hidden one out of tab order. */}
       <div className="disclosure" data-open={!expanded} inert={expanded}>
         <div>
-          <ServerSummary cpu={cpu} ram={ram} uptime={data.capacity?.uptime ?? initial.uptime} ssd={ssd} hdd={hdd} data={data} history={history} />
+          <ServerSummary cpu={cpu} ram={ram} data={data} history={history} />
         </div>
       </div>
       <div id="server-details" className="disclosure" data-open={expanded} inert={!expanded}>
@@ -925,7 +900,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
           </div>
         </div>
       </div>
-      {children}
+      <StorageContext.Provider value={{ ssd, hdd, proton: data.proton }}>{children}</StorageContext.Provider>
     </section>
   )
 }

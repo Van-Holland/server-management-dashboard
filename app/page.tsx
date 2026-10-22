@@ -1,5 +1,6 @@
 import { HeaderBar } from "@/components/header-bar"
 import { StatsCards } from "@/components/stats-cards"
+import { StorageTile } from "@/components/live-cards"
 import { DailyApps } from "@/components/apps-section"
 import { ToolsSection } from "@/components/tools-section"
 import { ServerPages } from "@/components/server-pages"
@@ -40,7 +41,7 @@ export default async function HomePage() {
             server is doing, then the tools (the arr stack and the downloaders). */}
         <DailyApps />
         <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} uptime={stats.uptime}>
-          <ServerPages media={media} backups={backups} health={summarize(buildChecks(snapshot, backups), lists)} />
+          <ServerPages storage={<StorageTile />} media={media} backups={backups} health={summarize(buildChecks(snapshot, backups), lists)} />
         </StatsCards>
         <ToolsSection />
       </div>

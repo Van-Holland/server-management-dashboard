@@ -48,17 +48,20 @@ export function ServerPages({
   media,
   backups,
   health,
+  storage,
 }: {
   media: MediaSummary | null
   backups: BackupsSnapshot
   health: HealthSummary
+  /** The live Storage tile (a client component that reads the numbers LiveCards already polls). */
+  storage?: React.ReactNode
 }) {
   const BackupIcon = verdictIcon(backups.worst)
   const backupStyle = verdictStyle(backups.worst)
   const backupsStatus = backupsLine(backups)
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
       <Link href="/media" className={cardClass} style={{ "--i": 9 } as CSSProperties}>
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
           <LayoutGrid className="size-5" aria-hidden="true" />
@@ -68,6 +71,8 @@ export function ServerPages({
           <p className="text-xs text-muted-foreground sm:truncate">{mediaLine(media)}</p>
         </div>
       </Link>
+
+      {storage}
 
       <Link href="/backups" className={cardClass} style={{ "--i": 10 } as CSSProperties}>
         <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary ${backupStyle.text}`}>
