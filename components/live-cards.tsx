@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
   ArrowDown,
@@ -668,28 +668,20 @@ function MiniBar({ name, pct, hint }: { name: string; pct: number | null; hint?:
   )
 }
 
-type StorageData = { ssd: DiskStats; hdd: DiskStats; proton: ProtonUsage | null }
-const StorageContext = createContext<StorageData | null>(null)
-
-/**
- * The Storage tile. It sits in the row of "what you keep" cards (Media library, Backups, Health), which the page builds on the
- * server, so it reads the live numbers from the context LiveCards provides instead of taking props.
- */
-export function StorageTile() {
-  const d = useContext(StorageContext)
-  if (!d) return null
+/** The Storage tile: how full each place the data lives is. Sizes show on hover. */
+function StorageCard({ ssd, hdd, proton, index, className = "" }: { ssd: DiskStats; hdd: DiskStats; proton: ProtonUsage | null; index: number; className?: string }) {
   const pct = (disk: DiskStats) => (disk.totalGb > 0 ? Math.round((100 * disk.usedGb) / disk.totalGb) : 0)
-  const protonPct = d.proton ? Math.round((100 * d.proton.usedBytes) / d.proton.totalBytes) : null
+  const protonPct = proton ? Math.round((100 * proton.usedBytes) / proton.totalBytes) : null
   return (
-    <div className="panel enter rounded-[14px] px-4 py-3" style={{ "--i": 10 } as React.CSSProperties}>
+    <div className={`panel enter rounded-[14px] p-4 ${className}`} style={{ "--i": index } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">Storage</p>
-      <div className="mt-1">
-        <MiniBar name="HDD" pct={pct(d.hdd)} hint={`${formatSize(d.hdd.usedGb)} / ${formatSize(d.hdd.totalGb)}`} />
-        <MiniBar name="SSD" pct={pct(d.ssd)} hint={`${formatSize(d.ssd.usedGb)} / ${formatSize(d.ssd.totalGb)}`} />
+      <div className="mt-2 space-y-1.5">
+        <MiniBar name="HDD" pct={pct(hdd)} hint={`${formatSize(hdd.usedGb)} / ${formatSize(hdd.totalGb)}`} />
+        <MiniBar name="SSD" pct={pct(ssd)} hint={`${formatSize(ssd.usedGb)} / ${formatSize(ssd.totalGb)}`} />
         <MiniBar
           name="Proton"
           pct={protonPct}
-          hint={d.proton ? `${formatSize(Math.round((d.proton.usedBytes / 2 ** 30) * 100) / 100)} / ${formatSize(Math.round(d.proton.totalBytes / 2 ** 30))}` : undefined}
+          hint={proton ? `${formatSize(Math.round((proton.usedBytes / 2 ** 30) * 100) / 100)} / ${formatSize(Math.round(proton.totalBytes / 2 ** 30))}` : undefined}
         />
       </div>
     </div>
@@ -700,12 +692,16 @@ function ServerSummary({
   cpu,
   ram,
   uptime,
+  ssd,
+  hdd,
   data,
   history,
 }: {
   cpu: number
   ram: number
   uptime: string
+  ssd: DiskStats
+  hdd: DiskStats
   data: LiveData
   history: History
 }) {
@@ -721,11 +717,8 @@ function ServerSummary({
       !drives || drives.status === "unknown" ? "—" : drives.status === "ok" ? "Healthy" : (drives.problem ?? "Check"),
       drives?.status === "alert" ? "text-usage-high" : drives?.status === "warn" ? "text-usage-mid" : undefined,
     ],
-    [
-      "Power",
-      power === undefined || power.onAc === null ? "—" : onBattery ? `On battery${batteries ? ` · ${batteries}` : ""}` : `Mains${batteries ? ` · ${batteries}` : ""}`,
-      onBattery ? "text-usage-high" : undefined,
-    ],
+    // Power only shows up when the mains is lost: a laptop server running on battery is the one thing here you must act on.
+    ...(onBattery ? ([["Power", `On battery${batteries ? ` · ${batteries}` : ""}`, "text-usage-high"]] as [string, string, string?][]) : []),
     ["Up for", uptime],
   ]
 
@@ -738,19 +731,23 @@ function ServerSummary({
   const upText = network ? `↑ ${formatSpeed(network.txBytesPerSec)}` : null
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="order-1 [&>*]:h-full">
       <SummaryCell index={5} label="System" value={`${cpu}% CPU · ${ram}% RAM`}>
-        <dl className="mt-2 space-y-1 text-xs">
+        <dl className="mt-2 space-y-1.5 text-xs">
           {systemRows.map(([k, v, tone]) => (
-            <div key={k} className="flex items-baseline justify-between gap-2 border-t border-border pt-1">
+            <div key={k} className="flex items-baseline justify-between gap-2">
               <dt className="text-muted-foreground">{k}</dt>
               <dd className={`truncate tabular-nums ${tone ?? "text-foreground"}`}>{v}</dd>
             </div>
           ))}
         </dl>
       </SummaryCell>
+      </div>
+      <StorageCard ssd={ssd} hdd={hdd} proton={data.proton} index={6} className="order-3 col-span-2 lg:order-2 lg:col-span-1" />
+      <div className="order-2 lg:order-3 [&>*]:h-full">
       <SummaryCell
-        index={6}
+        index={7}
         label="Network"
         value={network ? `${formatSpeed(network.rxBytesPerSec)} down` : "—"}
         sub={[upText, internetText].filter(Boolean).join(" · ")}
@@ -760,9 +757,10 @@ function ServerSummary({
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">download, last minute</p>
       </SummaryCell>
-      <div className="col-span-2 sm:col-span-1 [&>*]:h-full">
+      </div>
+      <div className="order-4 col-span-2 lg:col-span-1 [&>*]:h-full">
         <SummaryCell
-          index={7}
+          index={8}
           label="Downloads"
           value={downloads === null ? "—" : top ? `${active.length} active, ${formatSpeed(downloads.totalBytesPerSec)}` : "Idle"}
           sub={downloads === null ? undefined : top ? top.name : "Queue empty"}
@@ -913,7 +911,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
           cards in, so nothing jumps; `inert` keeps the hidden one out of tab order. */}
       <div className="disclosure" data-open={!expanded} inert={expanded}>
         <div>
-          <ServerSummary cpu={cpu} ram={ram} uptime={data.capacity?.uptime ?? initial.uptime} data={data} history={history} />
+          <ServerSummary cpu={cpu} ram={ram} uptime={data.capacity?.uptime ?? initial.uptime} ssd={ssd} hdd={hdd} data={data} history={history} />
         </div>
       </div>
       <div id="server-details" className="disclosure" data-open={expanded} inert={!expanded}>
@@ -950,7 +948,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
           </div>
         </div>
       </div>
-      <StorageContext.Provider value={{ ssd, hdd, proton: data.proton }}>{children}</StorageContext.Provider>
+      {children}
     </section>
   )
 }
