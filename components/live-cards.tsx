@@ -33,6 +33,7 @@ import type { Hardware } from "@/lib/hardware"
 import type { DiskCulprits } from "@/lib/disk-culprits"
 import type { DiskStats } from "@/lib/system-stats"
 import type { ProtonUsage } from "@/lib/proton-usage"
+import type { DriveHealth, DriveHealthSnapshot } from "@/lib/drive-health"
 
 type Capacity = { ssd: DiskStats; hdd: DiskStats; ram: number; uptime: string }
 
@@ -44,6 +45,7 @@ type LiveData = {
   speedtest: SpeedtestState | null
   internet: InternetSummary | null
   proton: ProtonUsage | null
+  drives: DriveHealthSnapshot | null
 }
 
 export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number; hardware: Hardware; uptime: string }
@@ -172,6 +174,7 @@ function DiskCard({
   tempC,
   icon: Icon,
   culprits = null,
+  health = null,
 }: {
   label: string
   disk: DiskStats
@@ -180,6 +183,8 @@ function DiskCard({
   icon: LucideIcon
   /** Only the 8TB drive passes this: who is using it right now. */
   culprits?: DiskCulprits | null
+  /** The drive's own health report (SMART), read hourly. */
+  health?: DriveHealth | null
 }) {
   const pct = Math.min(100, Math.round((disk.usedGb / disk.totalGb) * 100))
   return (
@@ -228,9 +233,9 @@ function DiskCard({
           )}
         </span>
         {/* Only the NVMe drive reports a temperature; the 8TB is a USB enclosure. */}
-        {tempC !== null && (
-          <span className={`shrink-0 font-mono tabular-nums ${tempColor(tempC, 50, 65)}`}>
-            {tempC}°C
+        {(tempC ?? health?.tempC ?? null) !== null && (
+          <span className={`shrink-0 font-mono tabular-nums ${tempColor((tempC ?? health?.tempC) as number, tempC === null ? 45 : 50, tempC === null ? 55 : 65)}`}>
+            {tempC ?? health?.tempC}°C
           </span>
         )}
       </div>
@@ -245,6 +250,35 @@ function DiskCard({
               : "Now: busy, from the system itself"}
         </p>
       )}
+
+      {health && <DriveHealthBlock health={health} />}
+    </div>
+  )
+}
+
+/** The drive's own health report, in plain words, under the disk card. Read hourly, so it says how old it is. */
+function DriveHealthBlock({ health }: { health: DriveHealth }) {
+  const hours = health.poweredOnHours
+  const rows: [string, string, string?][] = [
+    ["Health", health.passed === null ? "—" : health.passed ? "Passed" : "Failing", health.passed === false ? "text-usage-high" : undefined],
+  ]
+  if (health.wearPct !== null) rows.push(["Wear", `${health.wearPct}% used, ${100 - health.wearPct}% left`, health.wearPct >= 70 ? "text-usage-mid" : undefined])
+  if (health.sparePct !== null) rows.push(["Spare capacity", `${health.sparePct}%`])
+  if (health.mediaErrors !== null) rows.push(["Media errors", `${health.mediaErrors}`, health.mediaErrors > 0 ? "text-usage-high" : undefined])
+  if (health.badSectors !== null) rows.push(["Bad sectors", `${health.badSectors}`, health.badSectors > 0 ? "text-usage-high" : undefined])
+  if (hours !== null) rows.push(["Powered on", `${hours.toLocaleString("en-GB")} h (${Math.round(hours / 24).toLocaleString("en-GB")} days)`])
+  const checked = health.checkedAtSec ? Math.max(0, Math.round((Date.now() / 1000 - health.checkedAtSec) / 60)) : null
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <dl className="space-y-1 text-xs">
+        {rows.map(([k, v, tone]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className={`tabular-nums ${tone ?? "text-foreground"}`}>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {checked !== null && <p className="mt-2 text-[11px] text-muted-foreground">Drive report checked {checked < 1 ? "just now" : checked < 90 ? `${checked} min ago` : `${Math.round(checked / 60)} h ago`}</p>}
     </div>
   )
 }
@@ -669,17 +703,35 @@ export function StorageTile() {
 function ServerSummary({
   cpu,
   ram,
+  uptime,
   data,
   history,
 }: {
   cpu: number
   ram: number
+  uptime: string
   data: LiveData
   history: History
 }) {
   const cpuTemp = data.sensors?.cpuTempC ?? null
-  const onBattery = data.sensors?.power.onAc === false
-  const systemHot = onBattery || (cpuTemp !== null && cpuTemp >= 80)
+  const power = data.sensors?.power
+  const onBattery = power?.onAc === false
+  const batteries = power?.batteries.map((b) => `${b.percent}%`).join(", ")
+  const drives = data.drives
+  const systemRows: [string, string, string?][] = [
+    ["CPU temp", cpuTemp === null ? "—" : `${cpuTemp}°C`, cpuTemp === null ? undefined : cpuTemp >= 80 ? "text-usage-high" : cpuTemp >= 65 ? "text-usage-mid" : undefined],
+    [
+      "Drives",
+      !drives || drives.status === "unknown" ? "—" : drives.status === "ok" ? "Healthy" : (drives.problem ?? "Check"),
+      drives?.status === "alert" ? "text-usage-high" : drives?.status === "warn" ? "text-usage-mid" : undefined,
+    ],
+    [
+      "Power",
+      power === undefined || power.onAc === null ? "—" : onBattery ? `On battery${batteries ? ` · ${batteries}` : ""}` : `Mains${batteries ? ` · ${batteries}` : ""}`,
+      onBattery ? "text-usage-high" : undefined,
+    ],
+    ["Up for", uptime],
+  ]
 
   const network = data.rates?.network ?? null
   const downloads = data.downloads
@@ -691,16 +743,15 @@ function ServerSummary({
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-      <SummaryCell
-        index={5}
-        label="System"
-        value={onBattery ? "On battery, mains lost" : cpuTemp === null ? "Running" : `${cpuTemp}°C`}
-        valueClass={systemHot ? "text-usage-high" : "text-foreground"}
-      >
-        <div className="mt-2">
-          <MiniBar name="CPU" pct={cpu} />
-          <MiniBar name="RAM" pct={ram} />
-        </div>
+      <SummaryCell index={5} label="System" value={`${cpu}% CPU · ${ram}% RAM`}>
+        <dl className="mt-2 space-y-1 text-xs">
+          {systemRows.map(([k, v, tone]) => (
+            <div key={k} className="flex items-baseline justify-between gap-2 border-t border-border pt-1">
+              <dt className="text-muted-foreground">{k}</dt>
+              <dd className={`truncate tabular-nums ${tone ?? "text-foreground"}`}>{v}</dd>
+            </div>
+          ))}
+        </dl>
       </SummaryCell>
       <SummaryCell
         index={6}
@@ -743,6 +794,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
     speedtest: null,
     internet: null,
     proton: null,
+    drives: null,
   })
   const [notice, setNotice] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState<number | null>(null)
@@ -865,7 +917,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
           cards in, so nothing jumps; `inert` keeps the hidden one out of tab order. */}
       <div className="disclosure" data-open={!expanded} inert={expanded}>
         <div>
-          <ServerSummary cpu={cpu} ram={ram} data={data} history={history} />
+          <ServerSummary cpu={cpu} ram={ram} uptime={data.capacity?.uptime ?? initial.uptime} data={data} history={history} />
         </div>
       </div>
       <div id="server-details" className="disclosure" data-open={expanded} inert={!expanded}>
@@ -877,6 +929,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
               io={data.rates?.diskIo.ssd ?? null}
               tempC={data.sensors?.ssdTempC ?? null}
               icon={HardDrive}
+              health={data.drives?.ssd ?? null}
             />
             <DiskCard
               label="HDD"
@@ -885,6 +938,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
               tempC={null}
               icon={Database}
               culprits={data.rates?.hddCulprits ?? null}
+              health={data.drives?.hdd ?? null}
             />
             <ProtonCard proton={data.proton} />
             <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} uptime={data.capacity?.uptime ?? initial.uptime} />

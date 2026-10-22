@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDownloads } from "@/lib/downloads"
 import { getInternetSummary } from "@/lib/internet-watch"
+import { getDriveHealth } from "@/lib/drive-health"
 import { getProtonUsage } from "@/lib/proton-usage"
 import { sampleLiveRates } from "@/lib/sampler"
 import { getSensors } from "@/lib/sensors"
@@ -25,7 +26,7 @@ async function getCapacity() {
 // six times. Each section settles independently: a dead download client leaves
 // the temperatures alone, and an unreadable sensor leaves the disks alone.
 export async function GET() {
-  const [rates, capacity, sensors, downloads, speedtest, internet, proton] = await Promise.allSettled([
+  const [rates, capacity, sensors, downloads, speedtest, internet, proton, drives] = await Promise.allSettled([
     sampleLiveRates(),
     getCapacity(),
     getSensors(),
@@ -33,6 +34,7 @@ export async function GET() {
     getSpeedtestState(),
     getInternetSummary(),
     getProtonUsage(),
+    getDriveHealth(),
   ])
 
   return NextResponse.json({
@@ -43,5 +45,6 @@ export async function GET() {
     speedtest: speedtest.status === "fulfilled" ? speedtest.value : null,
     internet: internet.status === "fulfilled" ? internet.value : null,
     proton: proton.status === "fulfilled" ? proton.value : null,
+    drives: drives.status === "fulfilled" ? drives.value : null,
   })
 }
