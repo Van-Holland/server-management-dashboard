@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { dayMs, formatDuration, whenMs } from "@/lib/internet-format"
+import { isEcho } from "@/lib/health-kinds"
 import type { HealthHistory, KindedEvent, Level, RecurringRow } from "@/lib/health-history"
 
 /**
@@ -26,7 +27,7 @@ function Recurring({ row }: { row: RecurringRow }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm text-foreground">{row.title}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {row.count} times in 30 days · {formatDuration(Math.max(60, Math.round(row.totalMs / 1000)))} in total · last {row.active ? "now" : dayMs(row.lastMs)}
+          {row.count} times in 30 days{isEcho(row.id) ? "" : ` · ${formatDuration(Math.max(60, Math.round(row.totalMs / 1000)))} in total`} · last {row.active ? "now" : dayMs(row.lastMs)}
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
