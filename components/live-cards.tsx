@@ -633,6 +633,31 @@ function SummaryCell({
   )
 }
 
+/** The Storage tile of the summary row: one labelled bar per place the data lives. */
+function StorageCell({ rows, index }: { rows: { name: string; pct: number | null; size: string }[]; index: number }) {
+  return (
+    <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
+      <p className="text-xs text-muted-foreground">Storage</p>
+      <div className="mt-2 space-y-2">
+        {rows.map((r) => (
+          <div key={r.name}>
+            <div className="flex items-baseline justify-between gap-2 text-[13px] tabular-nums sm:text-sm">
+              <span className="font-medium text-foreground">{r.name}</span>
+              <span className="truncate text-muted-foreground">
+                {r.size && <span className="hidden text-xs sm:inline">{r.size}&ensp;</span>}
+                <span className="font-medium text-foreground">{r.pct === null ? "—" : `${r.pct}%`}</span>
+              </span>
+            </div>
+            <div className="mt-1">
+              <ProgressBar pct={r.pct ?? 0} label={`${r.name} usage`} color={usageColor(r.pct ?? 0)} size="sm" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ServerSummary({
   cpu,
   ssd,
@@ -650,7 +675,7 @@ function ServerSummary({
   const ssdPct = percent(ssd)
   const hddPct = percent(hdd)
   const protonPctNow = data.proton ? Math.round((100 * data.proton.usedBytes) / data.proton.totalBytes) : null
-  const fullest = Math.max(ssdPct, hddPct, protonPctNow ?? 0)
+  const protonGb = (bytes: number) => Math.round((bytes / 2 ** 30) * 100) / 100 // Proton's app counts in binary units
 
   const cpuTemp = data.sensors?.cpuTempC ?? null
   const onBattery = data.sensors?.power.onAc === false
@@ -679,12 +704,17 @@ function ServerSummary({
           />
         }
       />
-      <SummaryCell
+      <StorageCell
         index={6}
-        label="Storage"
-        value={`HDD ${hddPct}%, SSD ${ssdPct}%${protonPctNow === null ? "" : `, Proton ${protonPctNow}%`}`}
-        pct={fullest}
-        color={usageColor(fullest)}
+        rows={[
+          { name: "HDD", pct: hddPct, size: `${formatSize(hdd.usedGb)} / ${formatSize(hdd.totalGb)}` },
+          { name: "SSD", pct: ssdPct, size: `${formatSize(ssd.usedGb)} / ${formatSize(ssd.totalGb)}` },
+          {
+            name: "Proton",
+            pct: protonPctNow,
+            size: data.proton ? `${formatSize(protonGb(data.proton.usedBytes))} / ${formatSize(Math.round(data.proton.totalBytes / 2 ** 30))}` : "",
+          },
+        ]}
       />
       <SummaryCell
         index={7}
