@@ -31,10 +31,12 @@ function Recurring({ row, nowMs }: { row: RecurringRow; nowMs: number }) {
   )
 }
 
-function Entry({ e, nowMs }: { e: HealthEvent; nowMs: number }) {
+function Entry({ e, firstMs }: { e: HealthEvent; firstMs: number | null }) {
   const when =
     e.endMs === null
-      ? `since ${whenMs(e.startMs)} · still active`
+      ? e.startMs === firstMs
+        ? "already active when recording began · still active"
+        : `since ${whenMs(e.startMs)} · still active`
       : `${whenMs(e.startMs)} to ${whenMs(e.endMs)} · ${formatDuration(Math.max(60, Math.round((e.endMs - e.startMs) / 1000)))}`
   return (
     <li className="flex items-start gap-3 py-2.5">
@@ -87,7 +89,7 @@ export function HealthHistorySection({ history, nowMs }: { history: HealthHistor
           <>
             <ul className="mt-1 divide-y divide-border">
               {history.timeline.slice(0, SHOWN).map((e, i) => (
-                <Entry key={`${e.id}-${e.startMs}-${i}`} e={e} nowMs={nowMs} />
+                <Entry key={`${e.id}-${e.startMs}-${i}`} e={e} firstMs={history.recordingSinceMs} />
               ))}
             </ul>
             {history.timeline.length > SHOWN && <p className="mt-2 text-xs text-muted-foreground">{history.timeline.length - SHOWN} older entries not shown.</p>}
