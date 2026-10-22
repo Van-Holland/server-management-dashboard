@@ -9,6 +9,7 @@ import {
   BatteryWarning,
   ChevronDown,
   ChevronUp,
+  Cloud,
   Cpu,
   Database,
   Download,
@@ -31,6 +32,7 @@ import { dayMs, formatDuration, whenMs, type InternetSummary } from "@/lib/inter
 import type { Hardware } from "@/lib/hardware"
 import type { DiskCulprits } from "@/lib/disk-culprits"
 import type { DiskStats } from "@/lib/system-stats"
+import type { ProtonUsage } from "@/lib/proton-usage"
 
 type Capacity = { ssd: DiskStats; hdd: DiskStats; ram: number; uptime: string }
 
@@ -41,6 +43,7 @@ type LiveData = {
   downloads: DownloadsSnapshot | null
   speedtest: SpeedtestState | null
   internet: InternetSummary | null
+  proton: ProtonUsage | null
 }
 
 export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number; hardware: Hardware; uptime: string }
@@ -116,6 +119,47 @@ function CardShell({
         </div>
       </div>
       <div className="mt-5">{children}</div>
+    </div>
+  )
+}
+
+/** The Proton Drive account: the third place the data lives, next to the SSD and the 8TB drive. The number is read hourly. */
+function ProtonCard({ proton }: { proton: ProtonUsage | null }) {
+  const totalGb = proton ? Math.round(proton.totalBytes / 1e9) : 0
+  const usedGb = proton ? Math.round(proton.usedBytes / 1e9) : 0
+  const pct = proton ? Math.min(100, Math.round((100 * proton.usedBytes) / proton.totalBytes)) : 0
+  const ageH = proton ? Math.floor((Date.now() - Date.parse(proton.checkedAtIso)) / 3600000) : 0
+  return (
+    <div className="panel h-full rounded-2xl p-5 sm:p-6 lg:col-span-2">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+            <Cloud className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">Proton Drive</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {proton ? (
+                <>
+                  {formatSize(usedGb)} <span className="opacity-60">/</span> {formatSize(totalGb)}
+                </>
+              ) : (
+                "Not read yet"
+              )}
+            </p>
+          </div>
+        </div>
+        <p className="shrink-0 font-mono text-2xl font-semibold tabular-nums text-foreground">
+          {proton ? pct : "—"}
+          {proton && <span className="text-base text-muted-foreground">%</span>}
+        </p>
+      </div>
+      <div className="mt-5">
+        <ProgressBar pct={pct} label="Proton Drive usage" color={usageColor(pct)} />
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {proton ? `${formatSize(totalGb - usedGb)} free · whole account, read ${ageH < 1 ? "this hour" : `${ageH} h ago`}` : "Read once an hour"}
+      </p>
     </div>
   )
 }
@@ -604,7 +648,8 @@ function ServerSummary({
   const percent = (disk: DiskStats) => (disk.totalGb > 0 ? Math.round((100 * disk.usedGb) / disk.totalGb) : 0)
   const ssdPct = percent(ssd)
   const hddPct = percent(hdd)
-  const fullest = Math.max(ssdPct, hddPct)
+  const protonPctNow = data.proton ? Math.round((100 * data.proton.usedBytes) / data.proton.totalBytes) : null
+  const fullest = Math.max(ssdPct, hddPct, protonPctNow ?? 0)
 
   const cpuTemp = data.sensors?.cpuTempC ?? null
   const onBattery = data.sensors?.power.onAc === false
@@ -636,7 +681,7 @@ function ServerSummary({
       <SummaryCell
         index={6}
         label="Storage"
-        value={`HDD ${hddPct}%, SSD ${ssdPct}%`}
+        value={`HDD ${hddPct}%, SSD ${ssdPct}%${protonPctNow === null ? "" : `, Proton ${protonPctNow}%`}`}
         pct={fullest}
         color={usageColor(fullest)}
       />
@@ -674,6 +719,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
     downloads: null,
     speedtest: null,
     internet: null,
+    proton: null,
   })
   const [notice, setNotice] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState<number | null>(null)
@@ -817,6 +863,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
               icon={Database}
               culprits={data.rates?.hddCulprits ?? null}
             />
+            <ProtonCard proton={data.proton} />
             <SystemCard cpu={cpu} ram={ram} hardware={initial.hardware} sensors={data.sensors} uptime={data.capacity?.uptime ?? initial.uptime} />
             <NetworkCard
               network={data.rates?.network ?? null}

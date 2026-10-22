@@ -333,6 +333,21 @@ const CATALOGUE: Entry[] = [
     },
   },
   {
+    id: "proton-space",
+    group: "backups",
+    name: "Proton Drive space",
+    every: "every hour",
+    looksAt: "How full your Proton account is. Every offsite backup goes there, so when it is full the uploads fail. The total is the whole plan, including mail.",
+    rule: "Yellow from 80% full, red from 90%. Also yellow if the number has not been read for 6 hours.",
+    fix: "Delete old things you no longer need in Proton Drive (old dated database copies and versions are the first candidates), or upgrade the plan.",
+    match: starts("proton-"),
+    has: (c) => !!c.s.host.proton,
+    ok: (c) => {
+      const u = c.s.host.proton
+      return u ? `${Math.round((100 * u.usedBytes) / u.totalBytes)}% used, ${((u.totalBytes - u.usedBytes) / 1e9).toFixed(0)} GB free` : "Fine"
+    },
+  },
+  {
     id: "tailscale",
     group: "connection",
     name: "Tailscale (remote access)",
