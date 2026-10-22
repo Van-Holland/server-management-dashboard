@@ -3,7 +3,7 @@ import type { HealthEvent, HealthHistory, Level, RecurringRow } from "@/lib/heal
 
 /**
  * The History section of the Health page (added 2026-10-22): what came up and went away again, so a problem that fixed itself
- * is still on record and can be investigated until it stops coming back. Written by lib/health-history.ts.
+ * is still on record and can be investigated until it stops coming back. Things that are still wrong are NOT listed here: they are in the section above. Written by lib/health-history.ts.
  */
 
 const DOT: Record<Level, string> = { alert: "bg-usage-high", maintenance: "bg-usage-mid" }
@@ -31,13 +31,8 @@ function Recurring({ row, nowMs }: { row: RecurringRow; nowMs: number }) {
   )
 }
 
-function Entry({ e, firstMs }: { e: HealthEvent; firstMs: number | null }) {
-  const when =
-    e.endMs === null
-      ? e.startMs === firstMs
-        ? "already active when recording began · still active"
-        : `since ${whenMs(e.startMs)} · still active`
-      : `${whenMs(e.startMs)} to ${whenMs(e.endMs)} · ${formatDuration(Math.max(60, Math.round((e.endMs - e.startMs) / 1000)))}`
+function Entry({ e }: { e: HealthEvent }) {
+  const when = `${whenMs(e.startMs)} to ${whenMs(e.endMs ?? e.startMs)} · ${formatDuration(Math.max(60, Math.round(((e.endMs ?? e.startMs) - e.startMs) / 1000)))}`
   return (
     <li className="flex items-start gap-3 py-2.5">
       <Dot level={e.level} />
@@ -50,6 +45,8 @@ function Entry({ e, firstMs }: { e: HealthEvent; firstMs: number | null }) {
 }
 
 export function HealthHistorySection({ history, nowMs }: { history: HealthHistory; nowMs: number }) {
+  // Only what came up and went away again: anything still active is already in the section above.
+  const gone = history.timeline.filter((e) => e.endMs !== null)
   const recurring = history.recurring.filter((r) => r.count >= 2)
   const lastAgoMin = history.lastRecordedMs === null ? null : Math.round((nowMs - history.lastRecordedMs) / 60000)
   const stale = lastAgoMin === null || lastAgoMin > 30
@@ -83,16 +80,16 @@ export function HealthHistorySection({ history, nowMs }: { history: HealthHistor
 
       <div className="panel mt-3 rounded-[14px] p-4">
         <h3 className="text-xs font-medium text-muted-foreground">Timeline</h3>
-        {history.timeline.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">Nothing has come up since the recording began.</p>
+        {gone.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">Nothing has gone away again yet. Things still active are in the section above.</p>
         ) : (
           <>
             <ul className="mt-1 divide-y divide-border">
-              {history.timeline.slice(0, SHOWN).map((e, i) => (
-                <Entry key={`${e.id}-${e.startMs}-${i}`} e={e} firstMs={history.recordingSinceMs} />
+              {gone.slice(0, SHOWN).map((e, i) => (
+                <Entry key={`${e.id}-${e.startMs}-${i}`} e={e} />
               ))}
             </ul>
-            {history.timeline.length > SHOWN && <p className="mt-2 text-xs text-muted-foreground">{history.timeline.length - SHOWN} older entries not shown.</p>}
+            {gone.length > SHOWN && <p className="mt-2 text-xs text-muted-foreground">{gone.length - SHOWN} older entries not shown.</p>}
           </>
         )}
       </div>
