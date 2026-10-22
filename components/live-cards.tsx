@@ -131,7 +131,6 @@ function ProtonCard({ proton }: { proton: ProtonUsage | null }) {
   const totalGb = proton ? Math.round(proton.totalBytes / 2 ** 30) : 0
   const usedGb = proton ? Math.round((proton.usedBytes / 2 ** 30) * 100) / 100 : 0
   const pct = proton ? Math.min(100, Math.round((100 * proton.usedBytes) / proton.totalBytes)) : 0
-  const ageH = proton ? Math.floor((Date.now() - Date.parse(proton.checkedAtIso)) / 3600000) : 0
   return (
     <div className="panel h-full rounded-2xl p-5 sm:p-6 lg:col-span-2">
       <div className="flex items-center justify-between gap-4">
@@ -161,7 +160,7 @@ function ProtonCard({ proton }: { proton: ProtonUsage | null }) {
         <ProgressBar pct={pct} label="Proton Drive usage" color={usageColor(pct)} />
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        {proton ? `${formatSize(Math.round((totalGb - usedGb) * 10) / 10)} free · whole account, read ${ageH < 1 ? "this hour" : `${ageH} h ago`}` : "Read once an hour"}
+        {proton ? `${formatSize(Math.round((totalGb - usedGb) * 10) / 10)} free` : "Read once an hour"}
       </p>
     </div>
   )
@@ -256,18 +255,16 @@ function DiskCard({
   )
 }
 
-/** The drive's own health report, in plain words, under the disk card. Read hourly, so it says how old it is. */
+/** The drive's own health report, in plain words, under the disk card. Media errors only appear when there are some. */
 function DriveHealthBlock({ health }: { health: DriveHealth }) {
   const hours = health.poweredOnHours
   const rows: [string, string, string?][] = [
     ["Health", health.passed === null ? "—" : health.passed ? "Passed" : "Failing", health.passed === false ? "text-usage-high" : undefined],
   ]
   if (health.wearPct !== null) rows.push(["Wear", `${health.wearPct}% used, ${100 - health.wearPct}% left`, health.wearPct >= 70 ? "text-usage-mid" : undefined])
-  if (health.sparePct !== null) rows.push(["Spare capacity", `${health.sparePct}%`])
-  if (health.mediaErrors !== null) rows.push(["Media errors", `${health.mediaErrors}`, health.mediaErrors > 0 ? "text-usage-high" : undefined])
+  if (health.mediaErrors) rows.push(["Media errors", `${health.mediaErrors}`, health.mediaErrors > 0 ? "text-usage-high" : undefined])
   if (health.badSectors !== null) rows.push(["Bad sectors", `${health.badSectors}`, health.badSectors > 0 ? "text-usage-high" : undefined])
   if (hours !== null) rows.push(["Powered on", `${hours.toLocaleString("en-GB")} h (${Math.round(hours / 24).toLocaleString("en-GB")} days)`])
-  const checked = health.checkedAtSec ? Math.max(0, Math.round((Date.now() / 1000 - health.checkedAtSec) / 60)) : null
   return (
     <div className="mt-4 border-t border-border pt-3">
       <dl className="space-y-1 text-xs">
@@ -278,7 +275,6 @@ function DriveHealthBlock({ health }: { health: DriveHealth }) {
           </div>
         ))}
       </dl>
-      {checked !== null && <p className="mt-2 text-[11px] text-muted-foreground">Drive report checked {checked < 1 ? "just now" : checked < 90 ? `${checked} min ago` : `${Math.round(checked / 60)} h ago`}</p>}
     </div>
   )
 }
