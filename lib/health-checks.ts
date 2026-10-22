@@ -318,6 +318,21 @@ const CATALOGUE: Entry[] = [
     ok: (c) => `Last report ${ago(c.p!.ranAtIso, c.nowMs)}`,
   },
   {
+    id: "internet",
+    group: "connection",
+    name: "Internet connection",
+    every: "every minute",
+    looksAt: "Whether the server reaches your modem, Ziggo's first gateway and the wider internet. A watcher on the server tests all three every minute and keeps the history, so an outage shows where it broke.",
+    rule: "Red when the internet has been down for more than 5 minutes (or the watcher itself has stopped). Yellow for 24 hours after an outage of 5 minutes or more, and when there were 3 or more outages in the last 7 days.",
+    fix: "Open the Internet history: it shows each outage with its times and where it broke (your modem, the line or Ziggo, or further out). Show those times to Ziggo.",
+    match: starts("internet-"),
+    has: (c) => !!c.s.host.internet,
+    ok: (c) => {
+      const w = c.s.host.internet
+      return w ? `Up. ${w.status.outages7d === 0 ? "No outages in the last 7 days" : `${w.status.outages7d} ${w.status.outages7d === 1 ? "outage" : "outages"} in the last 7 days`}` : "Up"
+    },
+  },
+  {
     id: "tailscale",
     group: "connection",
     name: "Tailscale (remote access)",

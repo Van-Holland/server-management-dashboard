@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getDownloads } from "@/lib/downloads"
+import { getInternetSummary } from "@/lib/internet-watch"
 import { sampleLiveRates } from "@/lib/sampler"
 import { getSensors } from "@/lib/sensors"
 import { getSpeedtestState } from "@/lib/speedtest"
@@ -23,12 +24,13 @@ async function getCapacity() {
 // six times. Each section settles independently: a dead download client leaves
 // the temperatures alone, and an unreadable sensor leaves the disks alone.
 export async function GET() {
-  const [rates, capacity, sensors, downloads, speedtest] = await Promise.allSettled([
+  const [rates, capacity, sensors, downloads, speedtest, internet] = await Promise.allSettled([
     sampleLiveRates(),
     getCapacity(),
     getSensors(),
     getDownloads(),
     getSpeedtestState(),
+    getInternetSummary(),
   ])
 
   return NextResponse.json({
@@ -37,5 +39,6 @@ export async function GET() {
     sensors: sensors.status === "fulfilled" ? sensors.value : null,
     downloads: downloads.status === "fulfilled" ? downloads.value : null,
     speedtest: speedtest.status === "fulfilled" ? speedtest.value : null,
+    internet: internet.status === "fulfilled" ? internet.value : null,
   })
 }

@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises"
 import type { HealthWarning } from "@/lib/health"
+import { evaluateInternet, getInternetWatch, type InternetWatch } from "@/lib/internet-watch"
 
 /**
  * The host-level half of "Needs attention" (added 2026-10-20).
@@ -338,18 +339,21 @@ export type HostData = {
   hdd: SmartJson | null
   nvme: SmartJson | null
   smartDirExists: boolean
+  /** the internet watcher's files (added 2026-10-22); null until its first run */
+  internet: InternetWatch | null
 }
 
 /** Reads the four files the server's jobs write. Judging them is `warningsFromHost`, so the Health page can show the raw facts too. */
 export async function getHostData(): Promise<HostData> {
-  const [probe, watchdog, hdd, nvme, smartDirExists] = await Promise.all([
+  const [probe, watchdog, hdd, nvme, smartDirExists, internet] = await Promise.all([
     readJson<ProbeStatus>(PROBE_FILE),
     readJson<WatchdogStatus>(WATCHDOG_FILE),
     readJson<SmartJson>(SMART_HDD),
     readJson<SmartJson>(SMART_NVME),
     stat(`${HOST}/var/lib/mulderserver-health`).then(() => true).catch(() => false),
+    getInternetWatch(),
   ])
-  return { probe, watchdog, hdd, nvme, smartDirExists }
+  return { probe, watchdog, hdd, nvme, smartDirExists, internet }
 }
 
 export function warningsFromHost(d: HostData, nowMs: number): HealthWarning[] {
@@ -360,6 +364,7 @@ export function warningsFromHost(d: HostData, nowMs: number): HealthWarning[] {
     out.push(...evaluateProbe(d.probe, nowMs))
   }
   if (d.watchdog) out.push(...evaluateWatchdog(d.watchdog, nowMs))
+  out.push(...evaluateInternet(d.internet, nowMs))
   if (!d.hdd && !d.nvme) {
     out.push(
       maint(

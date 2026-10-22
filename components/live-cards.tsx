@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
@@ -26,6 +27,7 @@ import type { DownloadsSnapshot } from "@/lib/downloads"
 import type { NetworkRates } from "@/lib/network-stats"
 import type { Sensors } from "@/lib/sensors"
 import type { SpeedtestState } from "@/lib/speedtest"
+import { dayMs, formatDuration, whenMs, type InternetSummary } from "@/lib/internet-format"
 import type { Hardware } from "@/lib/hardware"
 import type { DiskCulprits } from "@/lib/disk-culprits"
 import type { DiskStats } from "@/lib/system-stats"
@@ -38,6 +40,7 @@ type LiveData = {
   sensors: Sensors | null
   downloads: DownloadsSnapshot | null
   speedtest: SpeedtestState | null
+  internet: InternetSummary | null
 }
 
 export type InitialStats = { ssd: DiskStats; hdd: DiskStats; cpu: number; ram: number; hardware: Hardware; uptime: string }
@@ -346,15 +349,45 @@ function SpeedReadout({
   )
 }
 
+/** One line about the internet connection, from the watcher on the server, and the way to its history. */
+function InternetLine({ internet }: { internet: InternetSummary | null }) {
+  const dot = !internet || internet.state === "stale" ? "bg-muted-foreground" : internet.state === "down" ? "bg-usage-high" : "bg-usage-low"
+  let text = "Internet watcher: no data yet"
+  if (internet?.state === "stale") text = "Internet watcher has stopped"
+  else if (internet?.state === "down") text = `Internet is down since ${internet.downSinceIso ? whenMs(Date.parse(internet.downSinceIso)) : "a few minutes"}`
+  else if (internet) {
+    const last = internet.lastOutage
+    text = last
+      ? `Internet up · last outage ${dayMs(last.start * 1000)}, ${formatDuration(last.secs)} · ${internet.outages7d} in 7 days`
+      : "Internet up · no outages seen"
+  }
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
+      <p className="flex min-w-0 items-center gap-2 text-xs text-foreground">
+        <span className={`size-2 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
+        <span className="truncate">{text}</span>
+      </p>
+      <Link
+        href="/internet"
+        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary/70"
+      >
+        History
+      </Link>
+    </div>
+  )
+}
+
 function NetworkCard({
   network,
   speedtest,
+  internet,
   onRunSpeedtest,
   running,
   notice,
 }: {
   network: NetworkRates | null
   speedtest: SpeedtestState | null
+  internet: InternetSummary | null
   onRunSpeedtest: () => void
   running: boolean
   notice: string | null
@@ -406,6 +439,8 @@ function NetworkCard({
           {notice ?? (latest ? `Last run ${formatAgo(latest.ranAt)}` : "Saturates the line for ~30s")}
         </p>
       </div>
+
+      <InternetLine internet={internet} />
     </CardShell>
   )
 }
@@ -638,6 +673,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
     sensors: null,
     downloads: null,
     speedtest: null,
+    internet: null,
   })
   const [notice, setNotice] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState<number | null>(null)
@@ -785,6 +821,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
             <NetworkCard
               network={data.rates?.network ?? null}
               speedtest={data.speedtest}
+              internet={data.internet}
               onRunSpeedtest={runSpeedtest}
               running={running}
               notice={notice ?? (data.speedtest?.error ? `Last test failed: ${data.speedtest.error}` : null)}
