@@ -606,9 +606,12 @@ function SummaryCell({
   valueClass = "text-foreground",
   index,
   spark,
+  sub,
 }: {
   label: string
   value: string
+  /** One quiet line of context under the headline. */
+  sub?: string
   pct?: number | null
   color?: string
   valueClass?: string
@@ -621,6 +624,7 @@ function SummaryCell({
     <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 truncate whitespace-nowrap text-[13px] font-medium tabular-nums sm:text-sm ${valueClass}`}>{value}</p>
+      <p className="mt-0.5 h-4 truncate text-xs text-muted-foreground">{sub}</p>
       {/* Fixed height so every cell lines up, whatever it shows underneath. */}
       <div className="mt-2 flex h-6 items-end">
         {spark ?? (pct !== null && pct !== undefined && (
@@ -633,24 +637,22 @@ function SummaryCell({
   )
 }
 
-/** The Storage tile of the summary row: one labelled bar per place the data lives. */
+/** The Storage strip under the summary tiles: capacity, so bars. HDD, SSD and Proton side by side, one short row. */
 function StorageCell({ rows, index }: { rows: { name: string; pct: number | null; size: string }[]; index: number }) {
   return (
     <div className="panel enter rounded-[14px] p-4" style={{ "--i": index } as React.CSSProperties}>
       <p className="text-xs text-muted-foreground">Storage</p>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 grid grid-cols-3 gap-4 sm:gap-6">
         {rows.map((r) => (
-          <div key={r.name}>
+          <div key={r.name} className="min-w-0">
             <div className="flex items-baseline justify-between gap-2 text-[13px] tabular-nums sm:text-sm">
               <span className="font-medium text-foreground">{r.name}</span>
-              <span className="truncate text-muted-foreground">
-                {r.size && <span className="hidden text-xs sm:inline">{r.size}&ensp;</span>}
-                <span className="font-medium text-foreground">{r.pct === null ? "—" : `${r.pct}%`}</span>
-              </span>
+              <span className="font-medium text-foreground">{r.pct === null ? "—" : `${r.pct}%`}</span>
             </div>
-            <div className="mt-1">
+            <div className="mt-1.5">
               <ProgressBar pct={r.pct ?? 0} label={`${r.name} usage`} color={usageColor(r.pct ?? 0)} size="sm" />
             </div>
+            <p className="mt-1 hidden h-4 truncate text-xs tabular-nums text-muted-foreground sm:block">{r.size}</p>
           </div>
         ))}
       </div>
@@ -660,12 +662,16 @@ function StorageCell({ rows, index }: { rows: { name: string; pct: number | null
 
 function ServerSummary({
   cpu,
+  ram,
+  uptime,
   ssd,
   hdd,
   data,
   history,
 }: {
   cpu: number
+  ram: number
+  uptime: string
   ssd: DiskStats
   hdd: DiskStats
   data: LiveData
@@ -688,13 +694,18 @@ function ServerSummary({
   const downloads = data.downloads
   const active = downloads?.items ?? []
 
+  const internetText =
+    data.internet?.state === "down" ? "internet down" : data.internet?.state === "stale" ? "watcher stopped" : data.internet ? "internet up" : null
+  const upText = network ? `↑ ${formatSpeed(network.txBytesPerSec)}` : null
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
       <SummaryCell
         index={5}
         label="System"
         value={systemValue}
         valueClass={systemHot ? "text-usage-high" : "text-foreground"}
+        sub={`RAM ${ram}% · up ${uptime}`}
         spark={
           <Sparkline
             values={history.cpu}
@@ -704,40 +715,46 @@ function ServerSummary({
           />
         }
       />
-      <StorageCell
-        index={6}
-        rows={[
-          { name: "HDD", pct: hddPct, size: `${formatSize(hdd.usedGb)} / ${formatSize(hdd.totalGb)}` },
-          { name: "SSD", pct: ssdPct, size: `${formatSize(ssd.usedGb)} / ${formatSize(ssd.totalGb)}` },
-          {
-            name: "Proton",
-            pct: protonPctNow,
-            size: data.proton ? `${formatSize(protonGb(data.proton.usedBytes))} / ${formatSize(Math.round(data.proton.totalBytes / 2 ** 30))}` : "",
-          },
-        ]}
-      />
       <SummaryCell
-        index={7}
+        index={6}
         label="Network"
         value={network ? `${formatSpeed(network.rxBytesPerSec)} down` : "—"}
+        sub={[upText, internetText].filter(Boolean).join(" · ")}
         spark={
           <Sparkline values={history.rx} floor={100_000} label="Download speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
         }
       />
-      <SummaryCell
-        index={8}
-        label="Downloads"
-        value={
-          downloads === null
-            ? "—"
-            : active.length === 0
-              ? "Idle"
-              : `${active.length} active, ${formatSpeed(downloads.totalBytesPerSec)}`
-        }
-        spark={
-          <Sparkline values={history.dl} floor={1_000_000} label="Download queue speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
-        }
-      />
+      <div className="col-span-2 sm:col-span-1">
+        <SummaryCell
+          index={7}
+          label="Downloads"
+          value={
+            downloads === null
+              ? "—"
+              : active.length === 0
+                ? "Idle"
+                : `${active.length} active, ${formatSpeed(downloads.totalBytesPerSec)}`
+          }
+          sub={downloads === null ? undefined : active.length === 0 ? "Queue empty" : active[0].name}
+          spark={
+            <Sparkline values={history.dl} floor={1_000_000} label="Download queue speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
+          }
+        />
+      </div>
+      <div className="col-span-2 sm:col-span-3">
+        <StorageCell
+          index={8}
+          rows={[
+            { name: "HDD", pct: hddPct, size: `${formatSize(hdd.usedGb)} / ${formatSize(hdd.totalGb)}` },
+            { name: "SSD", pct: ssdPct, size: `${formatSize(ssd.usedGb)} / ${formatSize(ssd.totalGb)}` },
+            {
+              name: "Proton",
+              pct: protonPctNow,
+              size: data.proton ? `${formatSize(protonGb(data.proton.usedBytes))} / ${formatSize(Math.round(data.proton.totalBytes / 2 ** 30))}` : "",
+            },
+          ]}
+        />
+      </div>
     </div>
   )
 }
@@ -873,7 +890,7 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
           cards in, so nothing jumps; `inert` keeps the hidden one out of tab order. */}
       <div className="disclosure" data-open={!expanded} inert={expanded}>
         <div>
-          <ServerSummary cpu={cpu} ssd={ssd} hdd={hdd} data={data} history={history} />
+          <ServerSummary cpu={cpu} ram={ram} uptime={data.capacity?.uptime ?? initial.uptime} ssd={ssd} hdd={hdd} data={data} history={history} />
         </div>
       </div>
       <div id="server-details" className="disclosure" data-open={expanded} inert={!expanded}>
