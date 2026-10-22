@@ -29,6 +29,9 @@ services:
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
       # Keeps the last speedtest result across restarts and rebuilds.
       - speedtest-cache:/cache
+      # The Health history (what came up and went away again). A folder on the host so it survives rebuilds and is in the
+      # rebuild kit. Writable on purpose: it is the only place this container writes to the host. Added 2026-10-22.
+      - /home/matt/health-history:/health-history
 
 volumes:
   speedtest-cache:

@@ -1,9 +1,11 @@
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import { HealthHistorySection } from "@/components/health-history"
 import { HealthOverview } from "@/components/health-overview"
 import { getBackups } from "@/lib/backups"
 import { getHealthSnapshot } from "@/lib/health"
 import { buildChecks, splitWarnings, summarize } from "@/lib/health-checks"
+import { getHealthHistory } from "@/lib/health-history"
 
 // Reads live files and live services on every request; must never be frozen into a build-time snapshot.
 export const dynamic = "force-dynamic"
@@ -11,7 +13,7 @@ export const dynamic = "force-dynamic"
 const TONE = { ok: ["bg-usage-low", "text-usage-low"], maintenance: ["bg-usage-mid", "text-usage-mid"], alert: ["bg-usage-high", "text-usage-high"] } as const
 
 export default async function HealthPage() {
-  const [snapshot, backups] = await Promise.all([getHealthSnapshot(), getBackups()])
+  const [snapshot, backups, history] = await Promise.all([getHealthSnapshot(), getBackups(), getHealthHistory(Date.now())])
   const checks = buildChecks(snapshot, backups, snapshot.checkedMs)
   const summary = summarize(checks, splitWarnings(snapshot, backups))
   const [dot, text] = TONE[summary.status]
@@ -38,6 +40,8 @@ export default async function HealthPage() {
         </div>
 
         <HealthOverview checks={checks} />
+
+        <HealthHistorySection history={history} nowMs={snapshot.checkedMs} />
 
         <p className="text-xs text-muted-foreground">
           Read live at {new Date(snapshot.checkedMs).toLocaleTimeString("en-GB")}
