@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import type { HealthWarning } from "@/lib/health"
+import { isEcho, kindOf, type WarningKind } from "@/lib/health-kinds"
 
 /**
  * The Health history (added 2026-10-22).
@@ -28,6 +29,8 @@ const RECURRING_WINDOW_MS = 30 * 86400000
 
 export type Level = "alert" | "maintenance"
 export type HealthEvent = { id: string; title: string; detail: string; level: Level; startMs: number; endMs: number | null }
+/** An event as the page sees it: with its kind, worked out when read so the list in health-kinds.ts can change without touching stored data. */
+export type KindedEvent = HealthEvent & { kind: WarningKind; echo: boolean }
 
 type OpenEntry = { title: string; detail: string; level: Level; startMs: number; lastSeenMs: number; missing: number }
 type OpenState = { startedMs: number; lastRecordedMs: number; open: Record<string, OpenEntry> }
@@ -99,21 +102,21 @@ export async function recordHealth(current: HealthWarning[], nowMs: number): Pro
 
 // ---------- reading, for the Health page ----------
 
-export type RecurringRow = { id: string; title: string; level: Level; count: number; totalMs: number; lastMs: number; often: boolean; active: boolean }
+export type RecurringRow = { kind: WarningKind; id: string; title: string; level: Level; count: number; totalMs: number; lastMs: number; often: boolean; active: boolean }
 export type HealthHistory = {
   recordingSinceMs: number | null
   lastRecordedMs: number | null
   /** newest first; events still going have endMs null */
-  timeline: HealthEvent[]
+  timeline: KindedEvent[]
   recurring: RecurringRow[]
 }
 
 export async function getHealthHistory(nowMs: number): Promise<HealthHistory> {
   const [state, closed] = await Promise.all([readOpen(), readClosed()])
   const openEvents: HealthEvent[] = state ? Object.entries(state.open).map(([id, e]) => ({ id, title: e.title, detail: e.detail, level: e.level, startMs: e.startMs, endMs: null })) : []
-  const all = [...closed, ...openEvents].sort((a, b) => b.startMs - a.startMs)
+  const all: KindedEvent[] = [...closed, ...openEvents].sort((a, b) => b.startMs - a.startMs).map((e) => ({ ...e, kind: kindOf(e.id), echo: isEcho(e.id) }))
 
-  const groups = new Map<string, HealthEvent[]>()
+  const groups = new Map<string, KindedEvent[]>()
   for (const e of all) {
     if (nowMs - (e.endMs ?? nowMs) > RECURRING_WINDOW_MS) continue
     groups.set(e.id, [...(groups.get(e.id) ?? []), e])
@@ -121,6 +124,7 @@ export async function getHealthHistory(nowMs: number): Promise<HealthHistory> {
   const recurring: RecurringRow[] = [...groups.entries()]
     .map(([id, ev]) => ({
       id,
+      kind: kindOf(id),
       title: ev[0].title,
       level: ev.some((e) => e.level === "alert") ? ("alert" as Level) : ("maintenance" as Level),
       count: ev.length,
