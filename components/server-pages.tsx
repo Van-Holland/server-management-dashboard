@@ -68,7 +68,7 @@ export function ServerPages({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">Media library</p>
-          <p className="text-xs text-muted-foreground sm:truncate">{mediaLine(media)}</p>
+          <p className="text-xs text-muted-foreground">{mediaLine(media)}</p>
         </div>
       </Link>
 
@@ -80,7 +80,7 @@ export function ServerPages({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">Backups</p>
-          <p className={`text-xs sm:truncate ${backupsStatus.tone}`}>{backupsStatus.text}</p>
+          <p className={`text-xs ${backupsStatus.tone}`}>{backupsStatus.text}</p>
         </div>
       </Link>
 
@@ -90,7 +90,7 @@ export function ServerPages({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground">Health</p>
-          <p className={`text-xs sm:truncate ${HEALTH_TONE[health.status]}`}>{health.text}</p>
+          <p className={`text-xs ${HEALTH_TONE[health.status]}`}>{health.text}</p>
         </div>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>
