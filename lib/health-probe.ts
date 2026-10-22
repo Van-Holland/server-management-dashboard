@@ -47,6 +47,8 @@ export type ProbeStatus = {
     all?: { name: string; state: "running" | "stopped" | "restarting" | "unhealthy" }[]
   }
   hddMounted?: boolean
+  /** what has been left behind in the downloads folder (added 2026-10-22); null when the probe could not look */
+  leftovers?: { checkedAtIso: string; totalMb: number; count: number; items: { name: string; kind: "download" | "failed-import" | "soulseek"; sizeMb: number; ageDays: number }[] } | null
   resources?: { ramPct: number | null; ramHighSinceIso: string | null; load15: number; cpus: number; loadHighSinceIso: string | null; maxTempC: number | null }
   jobs?: { name: string; ok: boolean; ageMin: number | null; maxMin: number }[]
   imageUpdates?: { checkedAtIso: string | null; items: { container: string; image: string; upToDate: boolean | null }[] }
@@ -135,6 +137,22 @@ export function evaluateProbe(p: ProbeStatus, nowMs: number): HealthWarning[] {
   }
   if (p.hddMounted === false) {
     out.push(alert("hdd-missing", "The 8TB drive is not mounted", "Media, photos and the in-house backups are out of reach. Check the USB cable and the drive's power, then mount it (REBUILD.md R4)."))
+  }
+  // Downloads that were never cleaned up: a failed import stays on disk for ever (the apps only remove a download after a good import).
+  const left = p.leftovers
+  if (left && left.count > 0) {
+    const size = left.totalMb >= 1024 ? `${(left.totalMb / 1024).toFixed(1)} GB` : `${left.totalMb} MB`
+    const label = (i: { name: string; kind: string; sizeMb: number; ageDays: number }) =>
+      `${i.name} (${i.sizeMb >= 1024 ? `${(i.sizeMb / 1024).toFixed(1)} GB` : `${i.sizeMb} MB`}, ${i.kind === "failed-import" ? "failed import" : i.kind === "soulseek" ? `Soulseek, ${i.ageDays} days` : `${i.ageDays} days`})`
+    const shown = left.items.slice(0, 5).map(label).join("; ")
+    const more = left.count > 5 ? `; and ${left.count - 5} more` : ""
+    out.push(
+      maint(
+        "leftover-downloads",
+        `${left.count} leftover ${left.count === 1 ? "download" : "downloads"} (${size})`,
+        `${shown}${more}. Usually an import that failed. If the file is already in your library, delete the torrent in qBittorrent with "delete files" (or tell Claude to remove the folder); if it is not, tell Claude so it can be imported.`,
+      ),
+    )
   }
   for (const c of p.containers.unhealthy) out.push(alert(`unhealthy-${c}`, `${c} reports itself unhealthy`, "Docker's own health check is failing for this container."))
   for (const c of p.containers.restarting) out.push(alert(`restarting-${c}`, `${c} keeps restarting`, "The container starts and stops again and again. Look at its logs."))

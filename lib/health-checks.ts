@@ -145,6 +145,18 @@ const CATALOGUE: Entry[] = [
     ok: () => "None of them reports a problem",
   },
   {
+    id: "leftovers",
+    group: "downloads",
+    name: "Leftover downloads",
+    every: "every 5 minutes",
+    looksAt: "The downloads folder for films, series, music and Soulseek: anything that has sat there for more than a week, anything in failed_imports, and Soulseek files the hourly mover did not take within 2 days.",
+    rule: "Yellow (this week) when something is left behind. Work in progress (incomplete downloads, the converter cache, the recycle bin) is skipped.",
+    fix: "If the file is already in your library, delete the torrent in qBittorrent with \"delete files\" or ask Claude to remove the folder. If it is not, ask Claude to import it.",
+    match: is("leftover-downloads"),
+    has: (c) => c.p?.leftovers !== undefined && c.p?.leftovers !== null,
+    ok: () => "Nothing is left behind in the downloads folder",
+  },
+  {
     id: "usenet",
     group: "downloads",
     name: "Usenet (SABnzbd)",
