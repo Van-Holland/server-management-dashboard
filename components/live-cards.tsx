@@ -724,7 +724,7 @@ function ServerSummary({
           <Sparkline values={history.rx} floor={100_000} label="Download speed over the last minute" stroke="color-mix(in oklab, var(--foreground) 55%, transparent)" />
         }
       />
-      <div className="col-span-2 sm:col-span-1">
+      <div className="col-span-2 sm:col-span-1 [&>*]:h-full">
         <SummaryCell
           index={7}
           label="Downloads"
