@@ -3,20 +3,23 @@
 import { useEffect, useRef, useState } from "react"
 import { dayMs, formatDuration, whenMs } from "@/lib/internet-format"
 import { isEcho } from "@/lib/health-kinds"
-import type { FixedInfo, HealthHistory, KindedEvent, Level, RecurringRow } from "@/lib/health-history"
+import type { FixedInfo, HealthHistory, KindedEvent, Level } from "@/lib/health-history"
 
 /**
  * The History section of the Health page (added 2026-10-22): what came up and went away again, so a problem that fixed itself
  * is still on record and can be investigated until it stops coming back. Written by lib/health-history.ts.
  *
- * Things that are still wrong are NOT listed here: they are in the section above. The default view is deliberately small: only
- * faults that are not yet fixed, the 5 newest. Behind "Show everything" sit the chores (updates, expiring keys), the short stops
- * (blips) and the problems marked fixed in fixed.json, which carry a green "Fixed" badge.
+ * Things that are still wrong are NOT listed here: they are in the section above. One row per alert (grouped by warning id, redesigned
+ * 2026-10-23): title, how many times, when it was last seen. Click a row to open every time it happened. The default view is
+ * deliberately small: only faults that are not yet fixed, the 6 most recent alerts. Behind "Show everything" sit the chores (updates,
+ * expiring keys), the short stops (blips) and the problems marked fixed in fixed.json, which carry a green "Fixed" badge.
  */
 
 const DOT: Record<Level, string> = { alert: "bg-usage-high", maintenance: "bg-usage-mid" }
-const SHOWN = 5
-const SHOWN_ALL = 50
+const SHOWN = 6
+const SHOWN_ALL = 60
+const OFTEN_COUNT = 3
+const OFTEN_WINDOW_MS = 7 * 86400000
 
 function Dot({ level }: { level: Level }) {
   return <span className={`mt-1.5 size-2 shrink-0 rounded-full ${DOT[level]}`} aria-hidden="true" />
@@ -75,43 +78,65 @@ function FixedBadge({ f }: { f: FixedInfo }) {
   )
 }
 
-function Recurring({ row }: { row: RecurringRow }) {
-  return (
-    <li className="flex items-start gap-3 py-3">
-      <Dot level={row.level} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-foreground">{row.title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {row.count} times in 30 days{isEcho(row.id) ? "" : ` · ${formatDuration(Math.max(60, Math.round(row.totalMs / 1000)))} in total`} · last {row.active ? "now" : dayMs(row.lastMs)}
-          {row.fixed && ` · ${row.fixed.note}`}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-        {row.fixed && <FixedBadge f={row.fixed} />}
-        {!row.fixed && row.often && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-usage-mid">keeps coming back</span>}
-        {row.active && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">active now</span>}
-      </div>
-    </li>
-  )
+type Group = {
+  id: string
+  title: string
+  level: Level
+  events: KindedEvent[] // newest first
+  lastMs: number
+  totalMs: number
+  often: boolean
+  active: boolean
+  fixed: FixedInfo | null
 }
 
-function Entry({ e }: { e: KindedEvent }) {
+function Occurrence({ e }: { e: KindedEvent }) {
   const end = e.endMs ?? e.startMs
   // An echo warning stays up for a while after the event, so its own length says nothing about the fault: show only when it was reported.
   const when = e.echo ? `reported ${whenMs(e.startMs)}` : `${whenMs(e.startMs)} to ${whenMs(end)} · ${formatDuration(Math.max(60, Math.round((end - e.startMs) / 1000)))}`
   return (
-    <li className="flex items-start gap-3 py-2.5">
-      <Dot level={e.level} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-foreground">{e.title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {when}
-          {e.kind === "chore" && " · chore"}
-          {e.blip && " · short stop"}
-          {e.fixed && ` · ${e.fixed.note}`}
-        </p>
+    <li className="py-1.5 text-xs text-muted-foreground">
+      {when}
+      {e.blip && " · short stop"}
+    </li>
+  )
+}
+
+function GroupRow({ g, nowMs }: { g: Group; nowMs: number }) {
+  const [open, setOpen] = useState(false)
+  const n = g.events.length
+  const echo = isEcho(g.id)
+  return (
+    <li className="py-3">
+      <div className="flex items-start gap-3">
+        <Dot level={g.level} />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="block text-sm text-foreground">{g.title}</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {n} {n === 1 ? "time" : "times"}
+            {echo ? "" : ` · ${formatDuration(Math.max(60, Math.round(g.totalMs / 1000)))} in total`} · last {g.active ? "now" : whenMs(g.lastMs)}
+            {g.fixed && ` · ${g.fixed.note}`}
+            <span className="ml-1.5 text-[11px]">{open ? "▲ hide" : "▼ show each time"}</span>
+          </span>
+        </button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          {g.fixed && <FixedBadge f={g.fixed} />}
+          {!g.fixed && g.often && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-usage-mid">keeps coming back</span>}
+          {g.active && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">active now</span>}
+        </div>
       </div>
-      {e.fixed && <FixedBadge f={e.fixed} />}
+      {open && (
+        <ul className="ml-5 mt-2 divide-y divide-border border-l border-border pl-3">
+          {g.events.map((e, i) => (
+            <Occurrence key={`${e.startMs}-${i}`} e={e} />
+          ))}
+        </ul>
+      )}
     </li>
   )
 }
@@ -119,15 +144,32 @@ function Entry({ e }: { e: KindedEvent }) {
 export function HealthHistorySection({ history, nowMs }: { history: HealthHistory; nowMs: number }) {
   const [everything, setEverything] = useState(false)
   // The default view: unfixed faults only. "Show everything" adds chores, short stops and fixed problems (with their badge).
-  const plain = (x: { kind: "fault" | "chore"; fixed: FixedInfo | null; blip?: boolean }) => x.kind === "fault" && !x.fixed && !x.blip
-  const limit = everything ? SHOWN_ALL : SHOWN
 
-  // Only what came up and went away again: anything still active is already in the section above.
+  // Only what came up and went away again is listed: anything still active is already in the section above. An alert that is active
+  // right now AND has earlier history gets a row with an "active now" badge.
+  const plain = (x: { kind: "fault" | "chore"; fixed: FixedInfo | null; blip?: boolean }) => x.kind === "fault" && !x.fixed && !x.blip
   const gone = history.timeline.filter((e) => e.endMs !== null)
-  const goneShown = gone.filter((e) => everything || plain(e))
-  const hiddenCount = gone.length - gone.filter(plain).length
+  const activeIds = new Set(history.timeline.filter((e) => e.endMs === null).map((e) => e.id))
+  const shownEvents = gone.filter((e) => everything || plain(e))
+  const hiddenCount = new Set(gone.map((e) => e.id)).size - new Set(gone.filter(plain).map((e) => e.id)).size
   const fixedCount = new Set(gone.filter((e) => e.fixed).map((e) => e.id)).size
-  const recurring = history.recurring.filter((r) => r.count >= 2 && (everything || plain(r)))
+
+  const byId = new Map<string, KindedEvent[]>()
+  for (const e of shownEvents) byId.set(e.id, [...(byId.get(e.id) ?? []), e]) // timeline is newest first, so each list is too
+  const groups: Group[] = [...byId.entries()]
+    .map(([id, ev]) => ({
+      id,
+      title: ev[0].title,
+      level: ev.some((e) => e.level === "alert") ? ("alert" as Level) : ("maintenance" as Level),
+      events: ev,
+      lastMs: Math.max(...ev.map((e) => e.endMs ?? e.startMs)),
+      totalMs: ev.reduce((sum, e) => sum + ((e.endMs ?? e.startMs) - e.startMs), 0),
+      often: ev.filter((e) => nowMs - e.startMs < OFTEN_WINDOW_MS && !e.blip).length >= OFTEN_COUNT,
+      active: activeIds.has(id),
+      fixed: ev.every((e) => e.fixed) ? ev[0].fixed : null, // fixed only if EVERY listed occurrence is from before the fix
+    }))
+    .sort((a, b) => b.lastMs - a.lastMs)
+  const limit = everything ? SHOWN_ALL : SHOWN
   const lastAgoMin = history.lastRecordedMs === null ? null : Math.round((nowMs - history.lastRecordedMs) / 60000)
   const stale = lastAgoMin === null || lastAgoMin > 30
 
@@ -147,7 +189,7 @@ export function HealthHistorySection({ history, nowMs }: { history: HealthHistor
         </button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        {everything ? "Everything that came up and went away again" : "Faults that came up and went away again and are not fixed yet"}, last 90 days.
+        {everything ? "Every alert that came up and went away again" : "Alerts that came up and went away again and are not fixed yet"}, last 90 days. Click one to see each time.
         {history.recordingSinceMs !== null && ` Recording since ${dayMs(history.recordingSinceMs)}.`}
       </p>
       {stale && (
@@ -158,31 +200,19 @@ export function HealthHistorySection({ history, nowMs }: { history: HealthHistor
         </p>
       )}
 
-      {recurring.length > 0 && (
-        <div className="panel mt-3 rounded-[14px] p-4">
-          <h3 className="text-xs font-medium text-muted-foreground">Comes back, worth a fix</h3>
-          <ul className="mt-1 divide-y divide-border">
-            {recurring.map((r) => (
-              <Recurring key={r.id} row={r} />
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="panel mt-3 rounded-[14px] p-4">
-        <h3 className="text-xs font-medium text-muted-foreground">Timeline</h3>
-        {goneShown.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">
+        {groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
             {everything ? "Nothing has gone away again yet." : "No open fault in the history."} Things still active are in the section above.
           </p>
         ) : (
           <>
-            <ul className="mt-1 divide-y divide-border">
-              {goneShown.slice(0, limit).map((e, i) => (
-                <Entry key={`${e.id}-${e.startMs}-${i}`} e={e} />
+            <ul className="divide-y divide-border">
+              {groups.slice(0, limit).map((g) => (
+                <GroupRow key={g.id} g={g} nowMs={nowMs} />
               ))}
             </ul>
-            {goneShown.length > limit && <p className="mt-2 text-xs text-muted-foreground">{goneShown.length - limit} older entries not shown.</p>}
+            {groups.length > limit && <p className="mt-2 text-xs text-muted-foreground">{groups.length - limit} older alerts not shown.</p>}
           </>
         )}
       </div>
