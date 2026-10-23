@@ -20,6 +20,7 @@ import { isBlip, isEcho, kindOf, type WarningKind } from "@/lib/health-kinds"
 const DIR = process.env.HEALTH_HISTORY_DIR ?? "/health-history"
 const OPEN_FILE = `${DIR}/open.json`
 const HISTORY_FILE = `${DIR}/history.jsonl`
+const FIXED_FILE = `${DIR}/fixed.json`
 
 const KEEP_MS = 90 * 86400000
 const GONE_AFTER_MISSES = 2
@@ -30,7 +31,14 @@ const RECURRING_WINDOW_MS = 30 * 86400000
 export type Level = "alert" | "maintenance"
 export type HealthEvent = { id: string; title: string; detail: string; level: Level; startMs: number; endMs: number | null }
 /** An event as the page sees it: with its kind, worked out when read so the list in health-kinds.ts can change without touching stored data. */
-export type KindedEvent = HealthEvent & { kind: WarningKind; echo: boolean }
+export type KindedEvent = HealthEvent & { kind: WarningKind; echo: boolean; blip: boolean; fixed: FixedInfo | null }
+/** A problem we looked at and fixed (added 2026-10-23). Lives in fixed.json, written by hand when a fix is made:
+ *  { "<warning id>": { "fixedMs": 1792739000000, "note": "EZTV removed from Prowlarr", "what": "...", "did": "...", "learn": "..." } }
+ *  what / did / learn are the plain-words story shown in the pop-over on the badge (no jargon, written like /eli5): what happened,
+ *  what we did, what to learn from it. All three are optional.
+ *  Only events that started BEFORE fixedMs carry the badge. If the same problem starts again afterwards, it is not fixed after all and
+ *  shows as an ordinary fault again, so a wrong "fixed" can never hide a real problem. */
+export type FixedInfo = { ms: number; note: string; what?: string; did?: string; learn?: string }
 
 type OpenEntry = { title: string; detail: string; level: Level; startMs: number; lastSeenMs: number; missing: number }
 type OpenState = { startedMs: number; lastRecordedMs: number; open: Record<string, OpenEntry> }
@@ -102,7 +110,7 @@ export async function recordHealth(current: HealthWarning[], nowMs: number): Pro
 
 // ---------- reading, for the Health page ----------
 
-export type RecurringRow = { kind: WarningKind; id: string; title: string; level: Level; count: number; totalMs: number; lastMs: number; often: boolean; active: boolean }
+export type RecurringRow = { kind: WarningKind; id: string; title: string; level: Level; count: number; totalMs: number; lastMs: number; often: boolean; active: boolean; fixed: FixedInfo | null }
 export type HealthHistory = {
   recordingSinceMs: number | null
   lastRecordedMs: number | null
@@ -111,13 +119,26 @@ export type HealthHistory = {
   recurring: RecurringRow[]
 }
 
+async function readFixed(): Promise<Record<string, { fixedMs: number; note: string; what?: string; did?: string; learn?: string }>> {
+  try {
+    return JSON.parse(await readFile(FIXED_FILE, "utf-8"))
+  } catch {
+    return {}
+  }
+}
+
 export async function getHealthHistory(nowMs: number): Promise<HealthHistory> {
-  const [state, closed] = await Promise.all([readOpen(), readClosed()])
+  const [state, closed, fixedList] = await Promise.all([readOpen(), readClosed(), readFixed()])
+  const fixedFor = (id: string, startMs: number): FixedInfo | null => {
+    const f = fixedList[id]
+    return f && startMs <= f.fixedMs ? { ms: f.fixedMs, note: f.note, what: f.what, did: f.did, learn: f.learn } : null
+  }
   const openEvents: HealthEvent[] = state ? Object.entries(state.open).map(([id, e]) => ({ id, title: e.title, detail: e.detail, level: e.level, startMs: e.startMs, endMs: null })) : []
-  const all: KindedEvent[] = [...closed.filter((e) => !isBlip(e.id, e.startMs, e.endMs)), ...openEvents].sort((a, b) => b.startMs - a.startMs).map((e) => ({ ...e, kind: kindOf(e.id), echo: isEcho(e.id) }))
+  const all: KindedEvent[] = [...closed, ...openEvents].sort((a, b) => b.startMs - a.startMs).map((e) => ({ ...e, kind: kindOf(e.id), echo: isEcho(e.id), blip: isBlip(e.id, e.startMs, e.endMs), fixed: fixedFor(e.id, e.startMs) }))
 
   const groups = new Map<string, KindedEvent[]>()
   for (const e of all) {
+    if (e.blip) continue // a blip is not a pattern
     if (nowMs - (e.endMs ?? nowMs) > RECURRING_WINDOW_MS) continue
     groups.set(e.id, [...(groups.get(e.id) ?? []), e])
   }
@@ -132,6 +153,7 @@ export async function getHealthHistory(nowMs: number): Promise<HealthHistory> {
       lastMs: Math.max(...ev.map((e) => e.endMs ?? nowMs)),
       often: ev.filter((e) => nowMs - e.startMs < OFTEN_WINDOW_MS).length >= OFTEN_COUNT,
       active: ev.some((e) => e.endMs === null),
+      fixed: ev.every((e) => e.fixed) ? ev[0].fixed : null, // fixed only if EVERY occurrence is from before the fix
     }))
     .sort((a, b) => Number(b.often) - Number(a.often) || b.count - a.count || b.lastMs - a.lastMs)
 
