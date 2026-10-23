@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import type { HealthWarning } from "@/lib/health"
-import { isEcho, kindOf, type WarningKind } from "@/lib/health-kinds"
+import { isBlip, isEcho, kindOf, type WarningKind } from "@/lib/health-kinds"
 
 /**
  * The Health history (added 2026-10-22).
@@ -114,7 +114,7 @@ export type HealthHistory = {
 export async function getHealthHistory(nowMs: number): Promise<HealthHistory> {
   const [state, closed] = await Promise.all([readOpen(), readClosed()])
   const openEvents: HealthEvent[] = state ? Object.entries(state.open).map(([id, e]) => ({ id, title: e.title, detail: e.detail, level: e.level, startMs: e.startMs, endMs: null })) : []
-  const all: KindedEvent[] = [...closed, ...openEvents].sort((a, b) => b.startMs - a.startMs).map((e) => ({ ...e, kind: kindOf(e.id), echo: isEcho(e.id) }))
+  const all: KindedEvent[] = [...closed.filter((e) => !isBlip(e.id, e.startMs, e.endMs)), ...openEvents].sort((a, b) => b.startMs - a.startMs).map((e) => ({ ...e, kind: kindOf(e.id), echo: isEcho(e.id) }))
 
   const groups = new Map<string, KindedEvent[]>()
   for (const e of all) {
