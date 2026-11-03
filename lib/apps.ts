@@ -39,6 +39,9 @@ export const DAILY: AppEntry[] = [
   // so the app also answers on 3011. The HTTPS name on :8443 still works, but only
   // the IP address works with Tailscale DNS switched off.
   { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, logo: null, tint: "#b9772a", keywords: ["workout", "gym", "weight", "training"] },
+  // Offline look-up tools (added 2026-11-03). Both work with no internet; see the vault's Offgrid Brainstorm note.
+  { name: "Kiwix", description: "Offline Wikipedia and first aid", href: `http://${TS_IP}:8090`, logo: "kiwix", tint: "#2f7fd1", keywords: ["wikipedia", "offline", "encyclopedia", "first aid", "medicine", "emergency"] },
+  { name: "Maps", description: "Offline map of the Netherlands", href: `http://${TS_IP}:8091`, logo: "offline-map", tint: "#4c9a6a", keywords: ["map", "offline", "navigation", "netherlands", "emergency"] },
 ]
 
 /**
