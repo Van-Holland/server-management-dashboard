@@ -40,7 +40,7 @@ export function ToolsSection() {
 
       <div id="tools-list" className="disclosure" data-open={open} inert={!open}>
         <div>
-          <div className="grid gap-x-10 gap-y-5 pt-3 sm:grid-cols-[repeat(2,minmax(0,22rem))]">
+          <div className="grid gap-x-8 gap-y-5 pt-3 sm:grid-cols-[repeat(3,minmax(0,18rem))]">
             {TOOLS.map((group) => (
               <div key={group.title}>
                 <p className="mb-1 px-2 text-xs text-muted-foreground">{group.title}</p>
@@ -61,7 +61,7 @@ export function ToolsSection() {
                           className="size-[18px] shrink-0 object-contain"
                         />
                         {tool.name}
-                        <span className="ml-auto text-xs text-muted-foreground">{tool.description}</span>
+                        <span className="ml-auto min-w-0 truncate text-xs text-muted-foreground">{tool.description}</span>
                       </a>
                     </li>
                   ))}

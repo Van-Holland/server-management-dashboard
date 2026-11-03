@@ -58,29 +58,30 @@ export type ToolGroup = { title: string; tools: ToolEntry[] }
 
 export const TOOLS: ToolGroup[] = [
   {
+    // Things you look things up in (2026-11-03). They work with no internet; see the vault's Offgrid Brainstorm note.
+    // Kolibri, BookStack and the vault copy are planned for this group. Descriptions stay general because each
+    // tool holds more than one thing; the keywords carry the specifics for the launcher.
+    title: "Knowledge",
+    tools: [
+      { name: "Kiwix", description: "Offline encyclopedia", href: `http://${TS_IP}:8090`, logo: "kiwix", tint: "#2f7fd1", keywords: ["wikipedia", "offline", "encyclopedia", "first aid", "medicine", "emergency"] },
+      { name: "Maps", description: "Offline maps", href: `http://${TS_IP}:8091`, logo: "offline-map", tint: "#4c9a6a", keywords: ["map", "offline", "navigation", "netherlands", "emergency"] },
+    ],
+  },
+  {
     // "Arr stack" is Matthijs's name for Sonarr, Radarr, Lidarr, Bazarr and Prowlarr. Lidarr moved to the Finders folder.
     title: "Arr stack",
     tools: [
       { name: "Sonarr", description: "TV shows", href: `http://${TS_IP}:8989`, logo: "sonarr", tint: "#35c5f4", keywords: ["series", "tv"] },
       { name: "Radarr", description: "Films", href: `http://${TS_IP}:7878`, logo: "radarr", tint: "#ffc230", keywords: ["movies"] },
       { name: "Bazarr", description: "Subtitles", href: `http://${TS_IP}:6767`, logo: "bazarr", tint: "#a8a8a8", keywords: ["subs", "captions"] },
-      { name: "Prowlarr", description: "Search sources", href: `http://${TS_IP}:9696`, logo: "prowlarr", tint: "#f97316", keywords: ["indexers", "nzbgeek"] },
+      { name: "Prowlarr", description: "Sources", href: `http://${TS_IP}:9696`, logo: "prowlarr", tint: "#f97316", keywords: ["indexers", "nzbgeek"] },
     ],
   },
   {
     title: "Downloaders",
     tools: [
-      { name: "qBittorrent", description: "Torrent downloads", href: `http://${TS_IP}:8080`, logo: "qbittorrent", tint: "#4a90e2", keywords: ["torrents", "vpn"] },
-      { name: "SABnzbd", description: "Usenet downloads", href: `http://${TS_IP}:8081`, logo: "sabnzbd", tint: "#ffcc00", keywords: ["nzb", "usenet"] },
-    ],
-  },
-  {
-    // Things you look things up in (2026-11-03). They work with no internet; see the vault's Offgrid Brainstorm note.
-    // Kolibri, BookStack and the vault copy are planned for this group.
-    title: "Knowledge",
-    tools: [
-      { name: "Kiwix", description: "Offline Wikipedia and first aid", href: `http://${TS_IP}:8090`, logo: "kiwix", tint: "#2f7fd1", keywords: ["wikipedia", "offline", "encyclopedia", "first aid", "medicine", "emergency"] },
-      { name: "Maps", description: "Offline map of the Netherlands", href: `http://${TS_IP}:8091`, logo: "offline-map", tint: "#4c9a6a", keywords: ["map", "offline", "navigation", "netherlands", "emergency"] },
+      { name: "qBittorrent", description: "Torrents", href: `http://${TS_IP}:8080`, logo: "qbittorrent", tint: "#4a90e2", keywords: ["torrents", "vpn"] },
+      { name: "SABnzbd", description: "Usenet", href: `http://${TS_IP}:8081`, logo: "sabnzbd", tint: "#ffcc00", keywords: ["nzb", "usenet"] },
     ],
   },
 ]
