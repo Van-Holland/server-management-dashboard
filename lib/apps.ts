@@ -39,9 +39,6 @@ export const DAILY: AppEntry[] = [
   // so the app also answers on 3011. The HTTPS name on :8443 still works, but only
   // the IP address works with Tailscale DNS switched off.
   { name: "Fitness Tracker", description: "Training log", href: `http://${TS_IP}:3011`, logo: null, tint: "#b9772a", keywords: ["workout", "gym", "weight", "training"] },
-  // Offline look-up tools (added 2026-11-03). Both work with no internet; see the vault's Offgrid Brainstorm note.
-  { name: "Kiwix", description: "Offline Wikipedia and first aid", href: `http://${TS_IP}:8090`, logo: "kiwix", tint: "#2f7fd1", keywords: ["wikipedia", "offline", "encyclopedia", "first aid", "medicine", "emergency"] },
-  { name: "Maps", description: "Offline map of the Netherlands", href: `http://${TS_IP}:8091`, logo: "offline-map", tint: "#4c9a6a", keywords: ["map", "offline", "navigation", "netherlands", "emergency"] },
 ]
 
 /**
@@ -75,6 +72,15 @@ export const TOOLS: ToolGroup[] = [
     tools: [
       { name: "qBittorrent", description: "Torrent downloads", href: `http://${TS_IP}:8080`, logo: "qbittorrent", tint: "#4a90e2", keywords: ["torrents", "vpn"] },
       { name: "SABnzbd", description: "Usenet downloads", href: `http://${TS_IP}:8081`, logo: "sabnzbd", tint: "#ffcc00", keywords: ["nzb", "usenet"] },
+    ],
+  },
+  {
+    // Things you look things up in (2026-11-03). They work with no internet; see the vault's Offgrid Brainstorm note.
+    // Kolibri, BookStack and the vault copy are planned for this group.
+    title: "Knowledge",
+    tools: [
+      { name: "Kiwix", description: "Offline Wikipedia and first aid", href: `http://${TS_IP}:8090`, logo: "kiwix", tint: "#2f7fd1", keywords: ["wikipedia", "offline", "encyclopedia", "first aid", "medicine", "emergency"] },
+      { name: "Maps", description: "Offline map of the Netherlands", href: `http://${TS_IP}:8091`, logo: "offline-map", tint: "#4c9a6a", keywords: ["map", "offline", "navigation", "netherlands", "emergency"] },
     ],
   },
 ]
