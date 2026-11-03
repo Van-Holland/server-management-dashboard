@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Dumbbell, House, LayoutGrid, Search, ShieldCheck, type LucideIcon } from "lucide-react"
 import { DAILY, FINDERS, PAGES, TOOLS, type AppEntry } from "@/lib/apps"
+import { followHost } from "@/lib/link-host"
 
 /**
  * Press Cmd+K (Ctrl+K elsewhere), type a few letters of an app, press Enter.
@@ -111,7 +112,7 @@ export function Launcher() {
     if (!item) return
     setOpen(false)
     if (item.href.startsWith("/")) router.push(item.href)
-    else window.open(item.href, "_blank", "noopener,noreferrer")
+    else window.open(followHost(item.href), "_blank", "noopener,noreferrer")
   }
 
   function onInputKey(event: React.KeyboardEvent) {

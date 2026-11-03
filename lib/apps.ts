@@ -14,7 +14,7 @@
 // Tailscale IP:port for each service. Raw IP:port, no per-app hostnames
 // (deliberate, see instructions.md). If a service ever needs HTTPS, give that
 // entry its own full `href`.
-const TS_IP = "100.69.6.89"
+export const TS_IP = "100.69.6.89"
 
 export type AppEntry = {
   name: string

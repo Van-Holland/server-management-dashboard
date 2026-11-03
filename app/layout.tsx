@@ -4,6 +4,7 @@ import './globals.css'
 import { AmbientGlow } from '@/components/ambient-glow'
 import { Constellation } from '@/components/constellation'
 import { Launcher } from '@/components/launcher'
+import { LinkHostRewriter } from '@/components/link-host-rewriter'
 
 const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
@@ -43,6 +44,7 @@ export default function RootLayout({
         <AmbientGlow />
         {children}
         <Launcher />
+        <LinkHostRewriter />
       </body>
     </html>
   )
