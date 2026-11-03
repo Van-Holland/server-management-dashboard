@@ -59,12 +59,36 @@ export type ToolGroup = { title: string; tools: ToolEntry[] }
 export const TOOLS: ToolGroup[] = [
   {
     // Things you look things up in (2026-11-03). They work with no internet; see the vault's Offgrid Brainstorm note.
-    // Kolibri, BookStack and the vault copy are planned for this group. Descriptions stay general because each
+    // The vault copy is planned for this group. Descriptions stay general because each
     // tool holds more than one thing; the keywords carry the specifics for the launcher.
     title: "Knowledge",
     tools: [
       { name: "Kiwix", description: "Offline encyclopedia", href: `http://${TS_IP}:8090`, logo: "kiwix", tint: "#2f7fd1", keywords: ["wikipedia", "offline", "encyclopedia", "first aid", "medicine", "emergency"] },
       { name: "Maps", description: "Offline maps", href: `http://${TS_IP}:8091`, logo: "offline-map", tint: "#4c9a6a", keywords: ["map", "offline", "navigation", "netherlands", "emergency"] },
+      { name: "Kolibri", description: "Offline courses", href: `http://${TS_IP}:8104`, logo: "kolibri", tint: "#7b4bd8", keywords: ["khan academy","lessons","learning","courses","school"] },
+      { name: "BookStack", description: "Handbook and wiki", href: `http://${TS_IP}:8100`, logo: "bookstack", tint: "#1f7ae0", keywords: ["emergency handbook","notes","wiki","documentation"] },
+    ],
+  },
+  {
+    title: "Household",
+    tools: [
+      { name: "Paperless", description: "Scanned documents", href: `http://${TS_IP}:8102`, logo: "paperless", tint: "#3f8f4f", keywords: ["scan","letters","ocr","archive","pdf"] },
+      { name: "Mealie", description: "Recipes", href: `http://${TS_IP}:8101`, logo: "mealie", tint: "#e0853a", keywords: ["cooking","meals","food"] },
+      { name: "FlatNotes", description: "Simple notes", href: `http://${TS_IP}:8103`, logo: "flatnotes", tint: "#c9a227", keywords: ["notes","memo","write"] },
+    ],
+  },
+  {
+    title: "Utilities",
+    tools: [
+      { name: "Stirling-PDF", description: "PDF tools", href: `http://${TS_IP}:8105`, logo: "stirling-pdf", tint: "#d64545", keywords: ["merge","split","pdf","convert"] },
+      { name: "CyberChef", description: "Convert and decode data", href: `http://${TS_IP}:8106`, logo: "cyberchef", tint: "#2e8b8b", keywords: ["base64","hash","decode","encode"] },
+    ],
+  },
+  {
+    title: "System",
+    tools: [
+      { name: "Uptime Kuma", description: "Is everything up", href: `http://${TS_IP}:8107`, logo: "uptime-kuma", tint: "#2faa5e", keywords: ["status","monitor","down","internet"] },
+      { name: "Syncthing", description: "Sync files between devices", href: `http://${TS_IP}:8108`, logo: "syncthing", tint: "#2b7bb9", keywords: ["sync","files","phone","copy"] },
     ],
   },
   {
