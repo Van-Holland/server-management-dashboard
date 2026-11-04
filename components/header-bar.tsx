@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Search } from "lucide-react"
+import { LogOut, Search } from "lucide-react"
 
 export function HeaderBar({ uptime }: { uptime: string }) {
   const [now, setNow] = useState<Date | null>(null)
@@ -23,6 +23,11 @@ export function HeaderBar({ uptime }: { uptime: string }) {
   const date = now
     ? now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
     : ""
+
+  const logOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" })
+    window.location.assign("/login")
+  }
 
   const openLauncher = () => window.dispatchEvent(new Event("open-launcher"))
 
@@ -72,6 +77,15 @@ export function HeaderBar({ uptime }: { uptime: string }) {
           className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-9"
         >
           <Search className="size-[18px]" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={logOut}
+          aria-label="Log out"
+          title="Log out"
+          className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-9"
+        >
+          <LogOut className="size-[18px]" aria-hidden="true" />
         </button>
         {/* Phone: just the time. Larger screens: seconds and the full date. */}
         <p className="text-[15px] tabular-nums text-foreground sm:hidden">{shortTime}</p>

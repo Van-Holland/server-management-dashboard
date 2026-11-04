@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Rethink_Sans } from 'next/font/google'
 import './globals.css'
 import { AmbientGlow } from '@/components/ambient-glow'
 import { Constellation } from '@/components/constellation'
+import { HideOnLogin } from '@/components/hide-on-login'
 import { Launcher } from '@/components/launcher'
 import { LinkHostRewriter } from '@/components/link-host-rewriter'
 
@@ -43,8 +44,10 @@ export default function RootLayout({
         <Constellation />
         <AmbientGlow />
         {children}
-        <Launcher />
-        <LinkHostRewriter />
+        <HideOnLogin>
+          <Launcher />
+          <LinkHostRewriter />
+        </HideOnLogin>
       </body>
     </html>
   )

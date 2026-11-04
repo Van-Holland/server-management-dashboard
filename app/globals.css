@@ -514,3 +514,15 @@ dialog.finders[open] .finders-item {
     animation: none;
   }
 }
+
+/* The login card shakes once on a wrong password (app/login/page.tsx). */
+@keyframes login-shake {
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.login-shake {
+  animation: login-shake 0.35s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-shake { animation: none; }
+}
