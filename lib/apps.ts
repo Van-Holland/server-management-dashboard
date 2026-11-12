@@ -82,6 +82,7 @@ export const TOOLS: ToolGroup[] = [
     tools: [
       { name: "Stirling-PDF", description: "PDF tools", href: `http://${TS_IP}:8105`, logo: "stirling-pdf", tint: "#d64545", keywords: ["merge","split","pdf","convert"] },
       { name: "CyberChef", description: "Convert and decode data", href: `http://${TS_IP}:8106`, logo: "cyberchef", tint: "#2e8b8b", keywords: ["base64","hash","decode","encode"] },
+      { name: "WoW Auction Tracker", description: "Auction prices and portfolio", href: `http://${TS_IP}:8109`, logo: "wow-auction-tracker", tint: "#e3b341", keywords: ["wow","warcraft","auction","gold","prices","portfolio"] },
     ],
   },
   {
