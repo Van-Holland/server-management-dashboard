@@ -1,7 +1,7 @@
 # Heating plan helpers (v4, written 2026-11-21, NOT yet installed). Put in /home/matt/docker/homeassistant/config/packages/.
 # The dashboard's Plan and Night test tabs write these; automations.yaml (v4) reads them.
 # No `initial:` on purpose: with it, every Home Assistant restart would reset what was saved on the page.
-# After the first start, set the values once (day 21, night 16, times 06:00 / 17:00 / 22:00, list 15,17,16,18).
+# After the first start, set the values once (day 21, night 16, times 06:00 / 17:00 / 22:00, list 12,14,16,18).
 input_number:
   verwarming_dag_temp:
     name: "Verwarming: dagtemperatuur"

@@ -196,13 +196,13 @@ function demoState(): DemoState {
     hvac: "auto",
     away: "Thuis",
     until: null,
-    plan: { ...emptyPlan, available: true, dayTemp: 21, nightTemp: 16, dayStart: "06:00", eveningStart: "17:00", nightStart: "22:00", testOn: true, testSeries: [15, 17, 16, 18], testStep: 5 },
+    plan: { ...emptyPlan, available: true, dayTemp: 21, nightTemp: 16, dayStart: "06:00", eveningStart: "17:00", nightStart: "22:00", testOn: true, testSeries: [12, 14, 16, 18], testStep: 5 },
   })
 }
 
 /** Made-up days for trying the page: colder days burn more, a colder night burns less, with a little noise. */
 function demoDays(now: Date): { days: DayStat[]; yesterday: DayDetail; today: DayDetail } {
-  const nights = [16, 15, 17, 16, 18, 15, 17, 16]
+  const nights = [16, 14, 12, 18, 14, 16, 12, 18]
   const days: DayStat[] = []
   for (let back = 8; back >= 0; back--) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back)
@@ -211,8 +211,8 @@ function demoDays(now: Date): { days: DayStat[]; yesterday: DayDetail; today: Da
     const boilerMin = Math.round((dd * 0.31 + 0.4 * Math.sin(back * 2.3)) * 60)
     const hourMin = Array.from({ length: 24 }, (_, h) => (h >= 5 && h < 22 ? Math.round(boilerMin / 17 + 4 * Math.sin(h + back)) : 0)).map((m) => Math.max(0, m))
     const nightTarget = nights[back % nights.length]
-    const nightDd = (dd * 8) / 24
-    const nightBoiler = Math.round((nightDd * (0.12 + 0.045 * (nightTarget - 15)) + 0.05 * Math.sin(back * 3.1)) * 60)
+    // Made-up bowl: a very cold night saves at night but pays back in the morning, so around 14 to 16 comes out cheapest.
+    const cycleMin = Math.round(boilerMin * (1 + 0.012 * (nightTarget - 15) ** 2) + 6 * Math.sin(back * 3.1))
     const partial = back === 0
     days.push({
       date: dayKey(d),
@@ -224,7 +224,7 @@ function demoDays(now: Date): { days: DayStat[]; yesterday: DayDetail; today: Da
       gasM3: null,
       scoreHours: round(boilerMin / 60 / dd, 3),
       scoreGas: null,
-      night: partial ? null : { target: nightTarget, boilerMin: nightBoiler, outsideAvg: round(avg - 1.5, 1), degreeDays: round(nightDd, 2), gasM3: null, scoreHours: round(nightBoiler / 60 / nightDd, 3), scoreGas: null },
+      night: partial ? null : { target: nightTarget, boilerMin: cycleMin, outsideAvg: avg, degreeDays: round(dd, 2), gasM3: null, scoreHours: round(cycleMin / 60 / dd, 3), scoreGas: null },
       warmupMin: 70 + Math.round(15 * Math.sin(back)),
       warmupTarget: 21,
     })

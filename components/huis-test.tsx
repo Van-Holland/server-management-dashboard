@@ -5,7 +5,7 @@ import { BOILER, focusRing, send, shortDate } from "@/components/huis-shared"
 import type { DayStat, PlanState } from "@/lib/huis-types"
 
 /**
- * The Night test tab. The night temperature rotates each evening through a list (15, 17, 16, 18 ...), and every night is scored
+ * The Night test tab. The night temperature rotates each evening through a list (12, 14, 16, 18 ...), and every night cycle (22:00 to 22:00 the next evening, so the morning warm-up is counted) is scored
  * as use per degree-day, so a cold night and a mild night compare fairly. Lower score = cheaper for the cold you had.
  * The rotation itself runs inside Home Assistant; this tab switches it on and off, sets the list and reads the results.
  */
@@ -88,7 +88,7 @@ export function TestTab({ plan, days, refresh }: { plan: PlanState; days: DaySta
 
       <h3 className="mt-6 text-sm font-medium text-muted-foreground">Results so far ({useGas ? "gas m³" : "boiler hours"} per degree-day, lower is cheaper)</h3>
       {groups.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">No scored nights yet. A night needs outside temperature data and an outside average below 18°. Check back after a few nights.</p>
+        <p className="mt-2 text-sm text-muted-foreground">No scored nights yet. A night cycle is scored once it is over (22:00 the next evening) and needs outside temperature data with an average below 17°. Check back after a few days.</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {groups.map((g) => (
@@ -108,16 +108,16 @@ export function TestTab({ plan, days, refresh }: { plan: PlanState; days: DaySta
         {best ? `Cheapest so far: ${best.target}° at night (${(best.score as number).toFixed(2)} per degree-day over ${best.nights.length} nights).` : "A winner needs at least 3 nights per temperature."}
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Fair, not perfect: sun, wind, the wood stove and who is home also change a night. That is why the temperatures take turns instead of running one week each. A cheaper night can mean a colder morning: check the warm-up time on the Today tab.
+        Fair, not perfect: sun, wind, the wood stove and who is home also change a night. That is why the temperatures take turns instead of running one week each. Each score covers the whole cycle from 22:00 to 22:00 the next evening, so the cost of warming the floor up again in the morning is counted. A cheaper score can still mean a colder morning: check the warm-up time on the Today tab.
       </p>
 
       {groups.length > 0 ? (
         <details className="mt-3 text-xs text-muted-foreground">
-          <summary className="cursor-pointer">Every night</summary>
+          <summary className="cursor-pointer">Every cycle</summary>
           <ul className="mt-2 space-y-1">
             {[...days].reverse().filter((d) => d.night?.target != null).map((d) => (
               <li key={d.date}>
-                {shortDate(d.date)}: {d.night!.target}° · boiler {d.night!.boilerMin} min · outside {d.night!.outsideAvg ?? "—"}° · score {(useGas ? d.night!.scoreGas : d.night!.scoreHours)?.toFixed(2) ?? "—"}
+                {shortDate(d.date)}: {d.night!.target}° at night · boiler {d.night!.boilerMin} min over the cycle · outside {d.night!.outsideAvg ?? "—"}° · score {(useGas ? d.night!.scoreGas : d.night!.scoreHours)?.toFixed(2) ?? "—"}
               </li>
             ))}
           </ul>

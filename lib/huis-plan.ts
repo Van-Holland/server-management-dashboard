@@ -19,7 +19,7 @@ export const PLAN = {
   testStep: "input_number.verwarming_test_stap",
 } as const
 
-export const emptyPlan: PlanState = { available: false, dayTemp: null, nightTemp: null, dayStart: null, eveningStart: null, nightStart: null, testOn: false, testSeries: [15, 17, 16, 18], testStep: 0 }
+export const emptyPlan: PlanState = { available: false, dayTemp: null, nightTemp: null, dayStart: null, eveningStart: null, nightStart: null, testOn: false, testSeries: [12, 14, 16, 18], testStep: 0 }
 
 const num = (v: unknown) => {
   const n = Number(v)

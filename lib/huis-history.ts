@@ -170,24 +170,25 @@ export function buildDayStat(rows: Row[], weather: Sample[], gas: MinimalRow[] |
   const gasM3 = gas ? gasBetween(gas, a, end) : null
   const boilerMin = hourMin.reduce((s, m) => s + m, 0)
 
-  // The night that ended this morning: 22:00 yesterday to 06:00. Only when it is over.
-  const nightFrom = a - 2 * HOUR
-  const nightTo = a + 6 * HOUR
+  // The night cycle that ended this evening: from 22:00 yesterday to 22:00 today. A floor keeps its heat for hours, so a cold night
+  // saves gas at night but costs it back at the morning warm-up; counting the whole cycle puts both in one number. Only when it is over.
+  const cycleFrom = a - 2 * HOUR
+  const cycleTo = a + 22 * HOUR
   let night: DayStat["night"] = null
-  if (nightTo <= now && rows.some((r) => r.t <= nightFrom + 4 * HOUR)) {
-    const nOut = average(weather, nightFrom, nightTo)
-    // Eight hours is a third of a day, so a night counts a third of a degree-day per degree of cold.
-    const nDd = nOut === null ? null : (Math.max(0, DEGREE_DAY_BASE - nOut) * 8) / 24
-    const nBoiler = Math.round(boilerMs(rows, nightFrom, nightTo) / 60_000)
-    const nGas = gas ? gasBetween(gas, nightFrom, nightTo) : null
+  if (cycleTo <= now) {
+    const cOut = average(weather, cycleFrom, cycleTo)
+    const cDd = cOut === null ? null : Math.max(0, DEGREE_DAY_BASE - cOut)
+    const cBoiler = Math.round(boilerMs(rows, cycleFrom, cycleTo) / 60_000)
+    const cGas = gas ? gasBetween(gas, cycleFrom, cycleTo) : null
     night = {
-      target: commonTarget(rows, nightFrom + HOUR, nightTo - HOUR),
-      boilerMin: nBoiler,
-      outsideAvg: nOut === null ? null : round(nOut, 1),
-      degreeDays: nDd === null ? null : round(nDd, 2),
-      gasM3: nGas,
-      scoreHours: score(nBoiler / 60, nDd, 0.3),
-      scoreGas: score(nGas, nDd, 0.3),
+      // The setting that held during the quiet middle of the night (23:00 to 05:00).
+      target: commonTarget(rows, a - HOUR, a + 5 * HOUR),
+      boilerMin: cBoiler,
+      outsideAvg: cOut === null ? null : round(cOut, 1),
+      degreeDays: cDd === null ? null : round(cDd, 2),
+      gasM3: cGas,
+      scoreHours: score(cBoiler / 60, cDd, 1),
+      scoreGas: score(cGas, cDd, 1),
     }
   }
 

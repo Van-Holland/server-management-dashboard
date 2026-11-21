@@ -45,7 +45,7 @@ export type DayStat = {
   scoreHours: number | null
   /** Gas m3 per degree-day, null until the gas meter exists. */
   scoreGas: number | null
-  /** The night that ended this morning: 22:00 yesterday to 06:00. */
+  /** The night cycle that ended this evening: 22:00 yesterday to 22:00 today, filed under the night setting that held in between. */
   night: { target: number | null; boilerMin: number; outsideAvg: number | null; degreeDays: number | null; gasM3: number | null; scoreHours: number | null; scoreGas: number | null } | null
   /** Minutes from the first big target rise of the day until the room was near it. */
   warmupMin: number | null
