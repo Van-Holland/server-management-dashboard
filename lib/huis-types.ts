@@ -1,0 +1,66 @@
+/**
+ * What the Heating and energy page shows, as plain data (added 2026-11-21). No server-only imports here, so the browser side can use it too.
+ * The numbers come from Home Assistant (lib/huis.ts). Plan and decisions: vault IT/Projects/Linux Home Server/Heating - Home Assistant Plan.md.
+ */
+
+/** The three away-mode choices, exactly as the Home Assistant helper `input_select.verwarming_weg_modus` spells them. */
+export const AWAY_MODES = ["Thuis", "Kort weg", "Lang weg"] as const
+export type AwayMode = (typeof AWAY_MODES)[number]
+
+export type HeatingState = {
+  roomTemp: number | null
+  /** The setpoint now. Null when the thermostat is off (frost protection). */
+  target: number | null
+  hvacMode: "auto" | "heat" | "off" | "unknown"
+  /** "clock_program_1", "manual" or "anti_frost". */
+  preset: string | null
+  action: "heating" | "idle" | "off" | "unknown"
+  awayMode: AwayMode | null
+  /** Local time, "YYYY-MM-DD HH:MM:SS", or null when no return time is set. */
+  awayUntil: string | null
+}
+
+export type DayPoint = { min: number; room: number | null; target: number | null }
+
+export type EnergyState = {
+  powerW: number | null
+  powerSeries: { min: number; w: number }[]
+  todayKwh: number | null
+  todayM3: number | null
+  /** One entry per hour of today that has started; m3 used in that hour. */
+  gasHours: { hour: number; m3: number }[]
+  /** Which meters Home Assistant does not know yet ("power", "electricity", "gas"). */
+  missing: string[]
+}
+
+export type CostBreakdown = { electricity: number; gas: number; fixed: number; total: number; kwh: number; m3: number; days: number }
+
+export type CostState =
+  | { state: "ok"; today: CostBreakdown; month: CostBreakdown; since: string }
+  | { state: "not-started"; startsOn: string }
+  | { state: "no-tariff" }
+  | { state: "no-data" }
+
+export type HuisSnapshot = {
+  source: "live" | "demo" | "unconfigured" | "error"
+  message?: string
+  nowIso: string
+  heating: HeatingState | null
+  day: { points: DayPoint[]; nowMin: number }
+  energy: EnergyState | null
+  costs: CostState
+}
+
+/**
+ * One price period. Prices include 21 % VAT and energy tax; `fixedPerMonth` is everything that does not depend on use,
+ * added up: delivery fee + grid fee for electricity and gas, minus the energy-tax reduction (so it can be negative per
+ * fuel, but is the net amount for both). The yearly discount is not in here: the supplier settles it on the annual bill.
+ */
+export type TariffPeriod = {
+  /** First day this period counts, "YYYY-MM-DD". */
+  from: string
+  electricityPerKwh: number
+  gasPerM3: number
+  fixedPerMonth: number
+  note?: string
+}

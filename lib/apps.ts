@@ -75,6 +75,8 @@ export const TOOLS: ToolGroup[] = [
       { name: "Paperless", description: "Scanned documents", href: `http://${TS_IP}:8102`, logo: "paperless", tint: "#3f8f4f", keywords: ["scan","letters","ocr","archive","pdf"] },
       { name: "Mealie", description: "Recipes", href: `http://${TS_IP}:8101`, logo: "mealie", tint: "#e0853a", keywords: ["cooking","meals","food"] },
       { name: "FlatNotes", description: "Simple notes", href: `http://${TS_IP}:8103`, logo: "flatnotes", tint: "#c9a227", keywords: ["notes","memo","write"] },
+      // An internal page of this dashboard (href starts with "/"), added 2026-11-21: the thermostat with its away mode, gas, power and cost, read from Home Assistant.
+      { name: "Heating and energy", description: "Thermostat, gas, power and cost", href: "/huis", logo: "heating", tint: "#3fb8b0", keywords: ["heating","thermostat","remeha","gas","electricity","power","energy","cost","tariffs","away","home assistant"] },
     ],
   },
   {

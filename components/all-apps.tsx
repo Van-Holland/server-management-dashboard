@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState, type CSSProperties } from "react"
+import Link from "next/link"
 import { ChevronRight, Dumbbell, Search, X } from "lucide-react"
 import { DAILY, FINDERS, TOOLS, type AppEntry } from "@/lib/apps"
 
@@ -31,15 +32,10 @@ function matches(app: AppEntry, words: string[]) {
 }
 
 function AppTile({ app }: { app: AppEntry }) {
-  return (
-    <a
-      href={app.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={app.description}
-      style={{ "--tint": app.tint } as CSSProperties}
-      className={`app group flex w-full flex-col items-center gap-2 rounded-2xl p-1 ${focusRing}`}
-    >
+  const className = `app group flex w-full flex-col items-center gap-2 rounded-2xl p-1 ${focusRing}`
+  const style = { "--tint": app.tint } as CSSProperties
+  const inner = (
+    <>
       <span className="app-icon flex size-14 items-center justify-center rounded-[18px]">
         {app.logo ? (
           <img src={`/logos/${app.logo}.svg`} alt="" width={32} height={32} className="logo-img size-8 object-contain" />
@@ -48,6 +44,19 @@ function AppTile({ app }: { app: AppEntry }) {
         )}
       </span>
       <span className="app-name text-center text-xs font-medium leading-tight">{app.name}</span>
+    </>
+  )
+  // A page of this dashboard (href starts with "/") opens in the same tab; everything else is another app and opens in a new one.
+  if (app.href.startsWith("/")) {
+    return (
+      <Link href={app.href} title={app.description} style={style} className={className}>
+        {inner}
+      </Link>
+    )
+  }
+  return (
+    <a href={app.href} target="_blank" rel="noopener noreferrer" title={app.description} style={style} className={className}>
+      {inner}
     </a>
   )
 }

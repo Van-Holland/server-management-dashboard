@@ -32,6 +32,9 @@ services:
       # The Health history (what came up and went away again). A folder on the host so it survives rebuilds and is in the
       # rebuild kit. Writable on purpose: it is the only place this container writes to the host. Added 2026-10-22.
       - /home/matt/health-history:/health-history
+      # The energy prices typed in on the Tariffs screen (/huis/tariffs): one small JSON file. A folder on the host so it survives rebuilds
+      # and is in the server backup. Writable on purpose. Added 2026-11-21.
+      - /home/matt/huis-data:/huis-data
 
 volumes:
   speedtest-cache:

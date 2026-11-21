@@ -32,3 +32,6 @@ tsconfig.tsbuildinfo
 .env.bak-*
 *.predeploy-*
 *.bak-*
+
+# Local copy of the tariffs folder when running on a computer (on the server it is /huis-data)
+.huis-data
