@@ -1,0 +1,227 @@
+# Heating v4 (2026-11-21, NOT yet installed). Thermostat: climate.wgw_ot_on_off (Remeha eTwist RF). v3 kept as automations.yaml.bak-before-v4
+# Day and night temperature and the three switch times are helpers (packages/heating_plan.yaml), changed on the dashboard's Plan tab.
+# Day (day start -> evening start): at day start + 5 min the target is set to exactly the day temperature (so lowering it also works);
+#   every 2 h at :05 it is raised again if it fell below it (a higher manual choice is left alone).
+# Evening (evening start -> night start): free. Only in Manual mode: at evening start + 5 min a target above the night temperature is set to it.
+# Night (night start -> day start): every 2 h at :05 the target is held at exactly the night temperature.
+# Night test: 5 min before the night starts, if the test is on, the night temperature becomes the next one in the list.
+# All rules only run when input_select.verwarming_weg_modus is "Thuis" (home). The away rules below are unchanged from v3.
+- id: heating_day_start
+  alias: "Verwarming: dag begint (exact dagtemperatuur)"
+  description: "Day start + 5 min: set the target to the day temperature."
+  mode: single
+  trigger:
+    - platform: time
+      at:
+        entity_id: input_datetime.verwarming_dag_start
+        offset: "00:05:00"
+  condition:
+    - condition: state
+      entity_id: input_select.verwarming_weg_modus
+      state: "Thuis"
+  action:
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.wgw_ot_on_off
+      data:
+        temperature: "{{ states('input_number.verwarming_dag_temp') | float(21) }}"
+- id: heating_day_minimum
+  alias: "Verwarming: overdag minimaal dagtemperatuur"
+  description: "Every 2 h at :05 between day start and evening start: if the target is below the day temperature, raise it."
+  mode: single
+  trigger:
+    - platform: time_pattern
+      hours: "/2"
+      minutes: 5
+  condition:
+    - condition: state
+      entity_id: input_select.verwarming_weg_modus
+      state: "Thuis"
+    - condition: time
+      after: input_datetime.verwarming_dag_start
+      before: input_datetime.verwarming_avond_start
+    - condition: template
+      value_template: "{{ state_attr('climate.wgw_ot_on_off', 'temperature') | float(99) < states('input_number.verwarming_dag_temp') | float(21) }}"
+  action:
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.wgw_ot_on_off
+      data:
+        temperature: "{{ states('input_number.verwarming_dag_temp') | float(21) }}"
+- id: heating_evening_manual_night
+  alias: "Verwarming: avond begint, handmatig naar nachttemperatuur"
+  description: "Evening start + 5 min: in Manual mode and above the night temperature, set the night temperature (the app program does not run in Manual mode)."
+  mode: single
+  trigger:
+    - platform: time
+      at:
+        entity_id: input_datetime.verwarming_avond_start
+        offset: "00:05:00"
+  condition:
+    - condition: state
+      entity_id: input_select.verwarming_weg_modus
+      state: "Thuis"
+    - condition: state
+      entity_id: climate.wgw_ot_on_off
+      state: "heat"
+    - condition: template
+      value_template: "{{ state_attr('climate.wgw_ot_on_off', 'temperature') | float(0) > states('input_number.verwarming_nacht_temp') | float(16) }}"
+  action:
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.wgw_ot_on_off
+      data:
+        temperature: "{{ states('input_number.verwarming_nacht_temp') | float(16) }}"
+- id: heating_night_hold
+  alias: "Verwarming: nacht vast op nachttemperatuur"
+  description: "Every 2 h at :05 between night start and day start: if the target is not the night temperature, set it."
+  mode: single
+  trigger:
+    - platform: time_pattern
+      hours: "/2"
+      minutes: 5
+  condition:
+    - condition: state
+      entity_id: input_select.verwarming_weg_modus
+      state: "Thuis"
+    - condition: time
+      after: input_datetime.verwarming_nacht_start
+      before: input_datetime.verwarming_dag_start
+    - condition: template
+      value_template: "{{ state_attr('climate.wgw_ot_on_off', 'temperature') | float(0) != states('input_number.verwarming_nacht_temp') | float(16) }}"
+  action:
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.wgw_ot_on_off
+      data:
+        temperature: "{{ states('input_number.verwarming_nacht_temp') | float(16) }}"
+- id: heating_night_test_rotate
+  alias: "Verwarming: nachttest, volgende nachttemperatuur"
+  description: "5 min before the night starts, if the test is on: night temperature = next number in the list, then step + 1."
+  mode: single
+  trigger:
+    - platform: time
+      at:
+        entity_id: input_datetime.verwarming_nacht_start
+        offset: "-00:05:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.verwarming_test_aan
+      state: "on"
+  variables:
+    series: "{{ states('input_text.verwarming_test_reeks').split(',') | map('float', 0) | select('gt', 0) | list }}"
+    step: "{{ states('input_number.verwarming_test_stap') | int(0) }}"
+  action:
+    - condition: template
+      value_template: "{{ series | count >= 2 }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.verwarming_nacht_temp
+      data:
+        value: "{{ series[step % (series | count)] }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.verwarming_test_stap
+      data:
+        value: "{{ step + 1 }}"
+- id: heating_away_mode_changed
+  alias: "Verwarming: weg-modus gewijzigd"
+  description: "Thuis = auto + clock program 1. Kort weg = Manual 16 until the return time. Lang weg = frost protection (Off)."
+  mode: restart
+  trigger:
+    - platform: state
+      entity_id: input_select.verwarming_weg_modus
+      not_from:
+        - "unavailable"
+        - "unknown"
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_select.verwarming_weg_modus
+              state: "Thuis"
+          sequence:
+            - service: climate.set_preset_mode
+              target:
+                entity_id: climate.wgw_ot_on_off
+              data:
+                preset_mode: clock_program_1
+        - conditions:
+            - condition: state
+              entity_id: input_select.verwarming_weg_modus
+              state: "Kort weg"
+            - condition: template
+              value_template: "{{ state_attr('input_datetime.verwarming_terug', 'timestamp') | float(0) > now().timestamp() }}"
+          sequence:
+            - service: climate.set_hvac_mode
+              target:
+                entity_id: climate.wgw_ot_on_off
+              data:
+                hvac_mode: "heat"
+            - delay: "00:00:10"
+            - service: climate.set_temperature
+              target:
+                entity_id: climate.wgw_ot_on_off
+              data:
+                temperature: 16
+        - conditions:
+            - condition: state
+              entity_id: input_select.verwarming_weg_modus
+              state: "Lang weg"
+            - condition: template
+              value_template: "{{ state_attr('input_datetime.verwarming_terug', 'timestamp') | float(0) > now().timestamp() + 86400 }}"
+          sequence:
+            - service: climate.set_hvac_mode
+              target:
+                entity_id: climate.wgw_ot_on_off
+              data:
+                hvac_mode: "off"
+      default:
+        - service: persistent_notification.create
+          data:
+            title: "Verwarming: weg-modus niet ingesteld"
+            message: "Zet eerst 'terug thuis op' in de toekomst (bij Lang weg: meer dan 24 uur vooruit), en kies dan Kort weg of Lang weg. De modus is teruggezet naar Thuis."
+        - service: input_select.select_option
+          target:
+            entity_id: input_select.verwarming_weg_modus
+          data:
+            option: "Thuis"
+- id: heating_away_return
+  alias: "Verwarming: terug thuis (automatisch)"
+  description: "Kort weg: back to Thuis at the return time. Lang weg: back to Thuis 24 h before the return time, so the floor can warm up."
+  mode: single
+  trigger:
+    - platform: time
+      at:
+        entity_id: input_datetime.verwarming_terug
+        offset: "-24:00:00"
+      id: lang_voorverwarmen
+    - platform: time
+      at: input_datetime.verwarming_terug
+      id: kort_terug
+  action:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: lang_voorverwarmen
+            - condition: state
+              entity_id: input_select.verwarming_weg_modus
+              state: "Lang weg"
+          sequence:
+            - service: input_select.select_option
+              target:
+                entity_id: input_select.verwarming_weg_modus
+              data:
+                option: "Thuis"
+        - conditions:
+            - condition: trigger
+              id: kort_terug
+            - condition: state
+              entity_id: input_select.verwarming_weg_modus
+              state: "Kort weg"
+          sequence:
+            - service: input_select.select_option
+              target:
+                entity_id: input_select.verwarming_weg_modus
+              data:
+                option: "Thuis"

@@ -1,15 +1,21 @@
 import { HEATING, SCHEDULE_POINTS, SCHEDULE_START_TARGET, TEMP_MAX, TEMP_MIN } from "@/lib/huis-config"
 import { callService, getHistory, getStates, haConfigured, totalAt, type HaState } from "@/lib/ha"
+import { dayKey } from "@/lib/huis-history"
+import { loadHistory } from "@/lib/huis-history"
+import { applyPlan, emptyPlan, parsePlan, type PlanChange } from "@/lib/huis-plan"
 import { activePeriod, readTariffs } from "@/lib/tariffs"
 import {
   AWAY_MODES,
   type AwayMode,
   type CostBreakdown,
   type CostState,
+  type DayDetail,
   type DayPoint,
+  type DayStat,
   type EnergyState,
   type HeatingState,
   type HuisSnapshot,
+  type PlanState,
 } from "@/lib/huis-types"
 
 /**
@@ -63,18 +69,6 @@ function parseHeating(states: HaState[]): HeatingState | null {
     awayMode: AWAY_MODES.find((m) => m === mode) ?? null,
     awayUntil: typeof until === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(until) ? until : null,
   }
-}
-
-async function buildDay(now: Date): Promise<DayPoint[]> {
-  const midnight = startOfDay(now)
-  const rows = (await getHistory([HEATING.climate], midnight, now, true))[HEATING.climate] ?? []
-  const points: DayPoint[] = []
-  for (const row of rows) {
-    const at = new Date(row.last_updated ?? row.last_changed)
-    // The first row is the state at midnight; its own timestamp can be from yesterday.
-    points.push({ min: at < midnight ? 0 : minuteOfDay(at), room: num(row.attributes?.current_temperature), target: num(row.attributes?.temperature) })
-  }
-  return points
 }
 
 // ---------- gas and electricity ----------
@@ -194,10 +188,66 @@ async function buildCosts(now: Date, energy: EnergyState | null, ids: MeterIds, 
 
 // ---------- demo data ----------
 
-type DemoState = { target: number | null; hvac: "auto" | "heat" | "off"; away: AwayMode; until: string | null }
+type DemoState = { target: number | null; hvac: "auto" | "heat" | "off"; away: AwayMode; until: string | null; plan: PlanState }
 const g = globalThis as unknown as { __huisDemo?: DemoState }
 function demoState(): DemoState {
-  return (g.__huisDemo ??= { target: null, hvac: "auto", away: "Thuis", until: null })
+  return (g.__huisDemo ??= {
+    target: null,
+    hvac: "auto",
+    away: "Thuis",
+    until: null,
+    plan: { ...emptyPlan, available: true, dayTemp: 21, nightTemp: 16, dayStart: "06:00", eveningStart: "17:00", nightStart: "22:00", testOn: true, testSeries: [15, 17, 16, 18], testStep: 5 },
+  })
+}
+
+/** Made-up days for trying the page: colder days burn more, a colder night burns less, with a little noise. */
+function demoDays(now: Date): { days: DayStat[]; yesterday: DayDetail; today: DayDetail } {
+  const nights = [16, 15, 17, 16, 18, 15, 17, 16]
+  const days: DayStat[] = []
+  for (let back = 8; back >= 0; back--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back)
+    const avg = round(4 + 3 * Math.sin(back * 1.1) + (8 - back) * 0.2, 1)
+    const dd = Math.max(0, 18 - avg)
+    const boilerMin = Math.round((dd * 0.31 + 0.4 * Math.sin(back * 2.3)) * 60)
+    const hourMin = Array.from({ length: 24 }, (_, h) => (h >= 5 && h < 22 ? Math.round(boilerMin / 17 + 4 * Math.sin(h + back)) : 0)).map((m) => Math.max(0, m))
+    const nightTarget = nights[back % nights.length]
+    const nightDd = (dd * 8) / 24
+    const nightBoiler = Math.round((nightDd * (0.12 + 0.045 * (nightTarget - 15)) + 0.05 * Math.sin(back * 3.1)) * 60)
+    const partial = back === 0
+    days.push({
+      date: dayKey(d),
+      partial,
+      boilerMin: partial ? Math.round(boilerMin * 0.8) : boilerMin,
+      hourMin,
+      outsideAvg: avg,
+      degreeDays: round(dd, 1),
+      gasM3: null,
+      scoreHours: round(boilerMin / 60 / dd, 3),
+      scoreGas: null,
+      night: partial ? null : { target: nightTarget, boilerMin: nightBoiler, outsideAvg: round(avg - 1.5, 1), degreeDays: round(nightDd, 2), gasM3: null, scoreHours: round(nightBoiler / 60 / nightDd, 3), scoreGas: null },
+      warmupMin: 70 + Math.round(15 * Math.sin(back)),
+      warmupTarget: 21,
+    })
+  }
+  const nowMin = minuteOfDay(now)
+  const detail = (upTo: number, shift: number): DayDetail => {
+    const points: DayPoint[] = []
+    let room = 16.2 + shift
+    const boiler: DayDetail["boiler"] = []
+    for (let min = 0; min <= upTo; min += 10) {
+      const target = scheduledTarget(min)
+      const heating = room < target - 0.15
+      room += heating ? 0.35 : -0.05
+      if (heating) {
+        const last = boiler[boiler.length - 1]
+        if (last && min - last.to <= 10) last.to = min + 10
+        else boiler.push({ from: min, to: min + 10 })
+      }
+      points.push({ min, room: round(room, 1), target })
+    }
+    return { points, boiler, outside: Array.from({ length: Math.floor(upTo / 60) + 1 }, (_, h) => ({ min: h * 60, t: round(3 + 4 * Math.sin(((h - 9) / 24) * 6.28) + 2 + shift, 1) })), nowMin: upTo }
+  }
+  return { days, today: detail(nowMin, 0), yesterday: detail(1439, 0.3) }
 }
 
 async function demoSnapshot(now: Date): Promise<HuisSnapshot> {
@@ -240,7 +290,20 @@ async function demoSnapshot(now: Date): Promise<HuisSnapshot> {
     const day = (days: number, kwh: number, m3: number) => breakdown(kwh, m3, days, period.electricityPerKwh, period.gasPerM3, period.fixedPerMonth, now)
     costs = { state: "ok", today: day(1, energy.todayKwh!, energy.todayM3!), month: day(Math.max(1, now.getDate()), 6.2 * now.getDate(), 3.4 * now.getDate()), since: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01` }
   }
-  return { source: "demo", nowIso: now.toISOString(), heating, day: { points, nowMin }, energy, costs }
+  const demoHistory = demoDays(now)
+  // The demo day comes from the simple room model above so the target buttons still move the line.
+  return {
+    source: "demo",
+    nowIso: now.toISOString(),
+    heating,
+    day: { ...demoHistory.today, points, nowMin },
+    yesterday: demoHistory.yesterday,
+    days: demoHistory.days,
+    outsideNow: demoHistory.today.outside[demoHistory.today.outside.length - 1]?.t ?? null,
+    plan: demo.plan,
+    energy,
+    costs,
+  }
 }
 
 // ---------- the page's data ----------
@@ -248,19 +311,34 @@ async function demoSnapshot(now: Date): Promise<HuisSnapshot> {
 export async function getHuisSnapshot(): Promise<HuisSnapshot> {
   const now = new Date()
   if (demoMode()) return demoSnapshot(now)
-  const empty = { points: [], nowMin: minuteOfDay(now) }
+  const empty: DayDetail = { points: [], boiler: [], outside: [], nowMin: minuteOfDay(now) }
+  const bare = { yesterday: null, days: [] as DayStat[], outsideNow: null, plan: emptyPlan }
   if (!haConfigured()) {
-    return { source: "unconfigured", message: "Home Assistant is not connected yet: HA_URL and HA_TOKEN are missing from the server's .env.", nowIso: now.toISOString(), heating: null, day: empty, energy: null, costs: { state: "no-tariff" } }
+    return { source: "unconfigured", message: "Home Assistant is not connected yet: HA_URL and HA_TOKEN are missing from the server's .env.", nowIso: now.toISOString(), heating: null, day: empty, ...bare, energy: null, costs: { state: "no-tariff" } }
   }
   try {
     const states = await getStates()
     const heating = parseHeating(states)
-    // The day line and the energy numbers ask Home Assistant different questions, so they run side by side.
-    const [points, built] = await Promise.all([buildDay(now).catch(() => [] as DayPoint[]), buildEnergy(states, now)])
-    const costs = await buildCosts(now, built.energy, built.ids, built.kwhNow, built.m3Now)
-    return { source: "live", nowIso: now.toISOString(), heating, day: { points, nowMin: minuteOfDay(now) }, energy: built.energy, costs }
+    // The history and the energy numbers ask Home Assistant different questions, so they run side by side.
+    const built = await buildEnergy(states, now)
+    const [history, costs] = await Promise.all([
+      loadHistory(now, built.ids.gas).catch(() => null),
+      buildCosts(now, built.energy, built.ids, built.kwhNow, built.m3Now),
+    ])
+    return {
+      source: "live",
+      nowIso: now.toISOString(),
+      heating,
+      day: history?.today ?? empty,
+      yesterday: history?.yesterday ?? null,
+      days: history?.days ?? [],
+      outsideNow: history?.outsideNow ?? null,
+      plan: parsePlan(states),
+      energy: built.energy,
+      costs,
+    }
   } catch (error) {
-    return { source: "error", message: error instanceof Error ? error.message : "Home Assistant could not be reached.", nowIso: now.toISOString(), heating: null, day: empty, energy: null, costs: { state: "no-tariff" } }
+    return { source: "error", message: error instanceof Error ? error.message : "Home Assistant could not be reached.", nowIso: now.toISOString(), heating: null, day: empty, ...bare, energy: null, costs: { state: "no-tariff" } }
   }
 }
 
@@ -307,4 +385,20 @@ export async function setTemperature(temperature: number): Promise<void> {
     return
   }
   await callService("climate", "set_temperature", { entity_id: HEATING.climate, temperature })
+}
+
+export async function setPlan(change: PlanChange): Promise<void> {
+  if (demoMode()) {
+    const plan = demoState().plan
+    Object.assign(plan, change)
+    if (change.testSeries) plan.testStep = 0
+    return
+  }
+  await applyPlan(change)
+}
+
+/** The plan as it is right now, for checking a change against. */
+export async function currentPlan(): Promise<PlanState> {
+  if (demoMode()) return demoState().plan
+  return parsePlan(await getStates())
 }

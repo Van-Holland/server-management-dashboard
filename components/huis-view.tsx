@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { CircleAlert, Minus, Plug, Plus, Settings2 } from "lucide-react"
-import { SCHEDULE_POINTS, SCHEDULE_START_TARGET, TEMP_MAX, TEMP_MIN, TEMP_STEP } from "@/lib/huis-config"
-import { AWAY_MODES, type AwayMode, type CostBreakdown, type CostState, type EnergyState, type HeatingState, type HuisSnapshot } from "@/lib/huis-types"
+import { card, focusRing, LINE, pad, send } from "@/components/huis-shared"
+import { PlanTab } from "@/components/huis-plan"
+import { TestTab } from "@/components/huis-test"
+import { TodayTab } from "@/components/huis-today"
+import { WeekTab } from "@/components/huis-week"
+import { TEMP_MAX, TEMP_MIN, TEMP_STEP } from "@/lib/huis-config"
+import { AWAY_MODES, type AwayMode, type CostBreakdown, type CostState, type EnergyState, type HeatingState, type HuisSnapshot, type PlanState } from "@/lib/huis-types"
 
 /**
  * The Heating and energy page (added 2026-11-21, design 3 chosen by Matthijs): the heating with its controls, a bar of today's
@@ -12,11 +17,6 @@ import { AWAY_MODES, type AwayMode, type CostBreakdown, type CostState, type Ene
  * Gas, power and cost wait for the P1 reader and say so until Home Assistant has those sensors.
  */
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-const card = "rounded-2xl border border-border bg-card p-4 sm:p-5"
-// Charts follow the rest of the dashboard: neutral lines (like the Network card), orange only as the one accent.
-const LINE = "color-mix(in oklab, var(--foreground) 55%, transparent)"
-const WARM = "color-mix(in oklab, var(--foreground) 70%, transparent)"
 const euro = new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR" })
 
 const AWAY_LABEL: Record<AwayMode, string> = { Thuis: "Home", "Kort weg": "Short away", "Lang weg": "Long away" }
@@ -26,18 +26,6 @@ const AWAY_HELP: Record<AwayMode, string> = {
   "Lang weg": "Frost protection. The heating restarts 24 hours before you are back.",
 }
 
-async function send(url: string, method: string, body: unknown): Promise<string | null> {
-  try {
-    const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-    if (response.ok) return null
-    const data = await response.json().catch(() => ({}))
-    return typeof data?.error === "string" ? data.error : "That did not work."
-  } catch {
-    return "The dashboard could not be reached."
-  }
-}
-
-const pad = (n: number) => String(n).padStart(2, "0")
 function toInput(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
@@ -70,7 +58,7 @@ function modeText(h: HeatingState) {
   return h.preset ? `Clock program ${h.preset.replace("clock_program_", "")}` : "Automatic"
 }
 
-function HeatingCard({ heating, refresh }: { heating: HeatingState; refresh: () => void }) {
+function HeatingCard({ heating, plan, refresh }: { heating: HeatingState; plan: PlanState; refresh: () => void }) {
   const [pending, setPending] = useState<number | null>(null)
   const [choice, setChoice] = useState<AwayMode | null>(null)
   const [until, setUntil] = useState("")
@@ -155,9 +143,13 @@ function HeatingCard({ heating, refresh }: { heating: HeatingState; refresh: () 
               <Plus className="size-4" aria-hidden="true" />
             </button>
           </div>
-          <p className="mt-3 max-w-xs text-xs text-muted-foreground">
-            The safety rules keep it at 21 ° or more from 06:05 to 17:00, and at 16 ° from 22:05 to 05:29.
-          </p>
+          {plan.available ? (
+            <p className="mt-3 max-w-xs text-xs text-muted-foreground">
+              The rules keep it at {plan.dayTemp}° or more from {plan.dayStart} to {plan.eveningStart}, and at {plan.nightTemp}° from {plan.nightStart} to morning. Change this on the Plan tab.
+            </p>
+          ) : (
+            <p className="mt-3 max-w-xs text-xs text-muted-foreground">The safety rules keep it at 21° or more from 06:05 to 17:00, and at 16° from 22:05 to 05:29.</p>
+          )}
         </div>
 
         <div className="w-full sm:w-auto sm:min-w-72">
@@ -216,61 +208,6 @@ function HeatingCard({ heating, refresh }: { heating: HeatingState; refresh: () 
           {error}
         </p>
       ) : null}
-    </section>
-  )
-}
-
-// ---------- the day ----------
-
-function DayCard({ snapshot }: { snapshot: HuisSnapshot }) {
-  const W = 640
-  const left = 8
-  const span = W - 2 * left
-  const x = (min: number) => left + (min / 1440) * span
-  const { points, nowMin } = snapshot.day
-
-  // The schedule as segments of the day.
-  const marks = [{ at: 0, target: SCHEDULE_START_TARGET }, ...SCHEDULE_POINTS]
-  const segments = marks.map((m, i) => ({ from: m.at, to: marks[i + 1]?.at ?? 1440, target: m.target }))
-
-  const rooms = points.map((p) => p.room).filter((v): v is number => v !== null)
-  const lo = Math.min(14, ...rooms.map((v) => Math.floor(v) - 1))
-  const hi = Math.max(23, ...rooms.map((v) => Math.ceil(v) + 1))
-  const y = (t: number) => 52 + (1 - (t - lo) / (hi - lo)) * 64
-
-  const roomPath = points
-    .filter((p) => p.room !== null)
-    .map((p, i) => `${i === 0 ? "M" : "L"}${x(p.min).toFixed(1)},${y(p.room as number).toFixed(1)}`)
-    .join(" ")
-  const lastRoom = [...points].reverse().find((p) => p.room !== null)?.room
-  const roomLine = roomPath && lastRoom != null ? `${roomPath} L${x(nowMin).toFixed(1)},${y(lastRoom).toFixed(1)}` : ""
-
-  return (
-    <section className={card} aria-labelledby="day-heading">
-      <h2 id="day-heading" className="text-sm font-medium text-muted-foreground">
-        Today
-      </h2>
-      <svg viewBox={`0 0 ${W} 150`} className="mt-3 h-auto w-full" role="img" aria-label="Today's heating schedule and room temperature">
-        {segments.map((s) => (
-          <rect key={s.from} x={x(s.from)} y={12} width={x(s.to) - x(s.from)} height={14} rx={3} fill={s.target >= 19 ? WARM : "var(--secondary)"} />
-        ))}
-        {[21, 16].map((t) => (
-          <g key={t}>
-            <line x1={left} x2={W - left} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeDasharray="3 4" />
-            <text x={W - left} y={y(t) - 4} textAnchor="end" fontSize="10" fill="var(--muted-foreground)">
-              {t}°
-            </text>
-          </g>
-        ))}
-        {roomLine ? <path d={roomLine} fill="none" stroke="var(--foreground)" strokeWidth={2} strokeLinejoin="round" /> : null}
-        <line x1={x(nowMin)} x2={x(nowMin)} y1={6} y2={122} stroke="var(--foreground)" strokeWidth={1.5} />
-        {[0, 6, 12, 18, 24].map((h) => (
-          <text key={h} x={x(h * 60)} y={142} textAnchor={h === 0 ? "start" : h === 24 ? "end" : "middle"} fontSize="10" fill="var(--muted-foreground)">
-            {pad(h)}
-          </text>
-        ))}
-      </svg>
-      <p className="mt-1 text-xs text-muted-foreground">The bar is the program in the Remeha app. The line is the room temperature. The vertical stroke is now.</p>
     </section>
   )
 }
@@ -373,10 +310,41 @@ function CostCard({ costs }: { costs: CostState }) {
   )
 }
 
+// ---------- gas and cost tab ----------
+
+function GasTab({ snapshot }: { snapshot: HuisSnapshot }) {
+  const today = snapshot.days[snapshot.days.length - 1]
+  const waiting = !snapshot.energy || snapshot.energy.missing.includes("gas")
+  return (
+    <div className="flex flex-col gap-4">
+      {waiting ? (
+        <p className="rounded-xl bg-secondary px-3 py-2 text-sm text-muted-foreground">
+          Until the P1 reader is connected, the Week tab scores the boiler's running hours{today ? ` (today ${Math.floor(today.boilerMin / 60)} h ${pad(today.boilerMin % 60)} min)` : ""}. When Home Assistant has the gas meter, the numbers below fill in and the Week and Night test tabs switch to gas by themselves.
+        </p>
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <PowerCard energy={snapshot.energy} />
+        <GasCard energy={snapshot.energy} />
+        <CostCard costs={snapshot.costs} />
+      </div>
+    </div>
+  )
+}
+
 // ---------- the page ----------
+
+const TABS = [
+  { id: "today", label: "Today" },
+  { id: "week", label: "Week" },
+  { id: "gas", label: "Gas and cost" },
+  { id: "test", label: "Night test" },
+  { id: "plan", label: "Plan" },
+] as const
+type TabId = (typeof TABS)[number]["id"]
 
 export function HuisView({ initial }: { initial: HuisSnapshot }) {
   const [snapshot, setSnapshot] = useState(initial)
+  const [tab, setTab] = useState<TabId>("today")
 
   const refresh = useCallback(async () => {
     try {
@@ -392,6 +360,16 @@ export function HuisView({ initial }: { initial: HuisSnapshot }) {
     return () => window.clearInterval(id)
   }, [refresh])
 
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "")
+    if (TABS.some((t) => t.id === hash)) setTab(hash as TabId)
+  }, [])
+  const choose = (id: TabId) => {
+    setTab(id)
+    window.history.replaceState(null, "", `#${id}`)
+  }
+
+  const live = snapshot.source === "live" || snapshot.source === "demo"
   return (
     <div className="flex flex-col gap-4">
       {snapshot.source === "demo" ? (
@@ -404,14 +382,35 @@ export function HuisView({ initial }: { initial: HuisSnapshot }) {
         </p>
       ) : null}
 
-      {snapshot.heating ? <HeatingCard heating={snapshot.heating} refresh={refresh} /> : null}
-      {snapshot.source === "live" || snapshot.source === "demo" ? <DayCard snapshot={snapshot} /> : null}
+      {snapshot.heating ? <HeatingCard heating={snapshot.heating} plan={snapshot.plan} refresh={refresh} /> : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <PowerCard energy={snapshot.energy} />
-        <GasCard energy={snapshot.energy} />
-        <CostCard costs={snapshot.costs} />
-      </div>
+      {live ? (
+        <section className={card} aria-label="Details">
+          <div role="tablist" aria-label="Heating and energy views" className="-mt-1 mb-4 flex gap-1 overflow-x-auto border-b border-border">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`tab-${t.id}`}
+                aria-selected={tab === t.id}
+                aria-controls="tab-panel"
+                onClick={() => choose(t.id)}
+                className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${focusRing} ${tab === t.id ? "border-foreground font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div id="tab-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+            {tab === "today" ? <TodayTab snapshot={snapshot} /> : null}
+            {tab === "week" ? <WeekTab days={snapshot.days} /> : null}
+            {tab === "gas" ? <GasTab snapshot={snapshot} /> : null}
+            {tab === "test" ? <TestTab plan={snapshot.plan} days={snapshot.days} refresh={refresh} /> : null}
+            {tab === "plan" ? <PlanTab plan={snapshot.plan} refresh={refresh} /> : null}
+          </div>
+        </section>
+      ) : null}
 
       <p className="flex items-center justify-between text-xs text-muted-foreground">
         <span>Updated {new Date(snapshot.nowIso).toLocaleTimeString("en-GB")}</span>
