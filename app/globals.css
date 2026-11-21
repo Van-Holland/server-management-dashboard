@@ -526,3 +526,24 @@ dialog.finders[open] .finders-item {
 @media (prefers-reduced-motion: reduce) {
   .login-shake { animation: none; }
 }
+
+/* The "All apps" window (components/all-apps.tsx), added 2026-11-21. It reuses the Finders popup (open/close animation, phone sheet)
+   and only changes the size: wider, and the list of apps scrolls inside it while the header and search box stay put. */
+dialog.finders.allapps {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 4rem);
+}
+dialog.finders.allapps[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.finders.allapps .allapps-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+@media (max-width: 639px) {
+  dialog.finders.allapps {
+    width: 100%;
+    max-height: 88dvh;
+  }
+}

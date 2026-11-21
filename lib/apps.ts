@@ -90,6 +90,8 @@ export const TOOLS: ToolGroup[] = [
     tools: [
       { name: "Uptime Kuma", description: "Is everything up", href: `http://${TS_IP}:8107`, logo: "uptime-kuma", tint: "#2faa5e", keywords: ["status","monitor","down","internet"] },
       { name: "Syncthing", description: "Sync files between devices", href: `http://${TS_IP}:8108`, logo: "syncthing", tint: "#2b7bb9", keywords: ["sync","files","phone","copy"] },
+      // Added 2026-11-21: the heating (Remeha thermostat) and, once the P1 reader arrives, gas and electricity. Logo from homarr-labs/dashboard-icons.
+      { name: "Home Assistant", description: "Heating, gas and power", href: `http://${TS_IP}:8123`, logo: "home-assistant", tint: "#18bcf2", keywords: ["heating","thermostat","remeha","energy","gas","electricity","smart home","away"] },
     ],
   },
   {

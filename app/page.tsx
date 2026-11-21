@@ -1,7 +1,7 @@
 import { HeaderBar } from "@/components/header-bar"
 import { StatsCards } from "@/components/stats-cards"
 import { DailyApps } from "@/components/apps-section"
-import { ToolsSection } from "@/components/tools-section"
+import { AllApps } from "@/components/all-apps"
 import { ServerPages } from "@/components/server-pages"
 import { HealthBanner } from "@/components/health-banner"
 import { getBackups } from "@/lib/backups"
@@ -37,12 +37,12 @@ export default async function HomePage() {
         {/* Empty unless torrents or an indexer are silently broken. */}
         <HealthBanner warnings={alerts} />
         {/* Ordered by how often each part is used: the apps first, then how the
-            server is doing, then the tools (the arr stack and the downloaders). */}
+            server is doing, then the All apps button (every app and tool in one window). */}
         <DailyApps />
         <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} uptime={stats.uptime}>
           <ServerPages media={media} backups={backups} health={summarize(buildChecks(snapshot, backups), lists)} />
         </StatsCards>
-        <ToolsSection />
+        <AllApps />
       </div>
     </main>
   )
