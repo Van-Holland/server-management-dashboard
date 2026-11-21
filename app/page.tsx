@@ -36,7 +36,7 @@ export default async function HomePage() {
         {/* Empty unless torrents or an indexer are silently broken. */}
         <HealthBanner warnings={alerts} />
         {/* Ordered by how often each part is used: the apps first, then how the
-            server is doing. Every app and tool is in the All apps window, opened from the Your apps header. */}
+            server is doing. Every app and tool is in the All apps window, opened from the Apps title. */}
         <DailyApps />
         <StatsCards ssd={stats.ssd} hdd={stats.hdd} cpu={stats.cpu} ram={stats.ram} hardware={hardware} uptime={stats.uptime}>
           <ServerPages media={media} backups={backups} health={summarize(buildChecks(snapshot, backups), lists)} />

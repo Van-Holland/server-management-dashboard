@@ -6,7 +6,7 @@ import { FindersFolder } from "@/components/finders-folder"
 import { DAILY, type AppEntry } from "@/lib/apps"
 
 /**
- * "Your apps": the apps used every day, drawn like icons on a phone's home screen:
+ * "Apps": the apps used every day, drawn like icons on a phone's home screen:
  * a large logo with its name centred underneath. The description line was dropped
  * on purpose (2026-10-19): a name and a recognisable mark say enough. The
  * description still shows in the tooltip and in the Cmd+K launcher.
@@ -57,11 +57,8 @@ function DailyTile({ app, index }: { app: AppEntry; index: number }) {
 export function DailyApps() {
   return (
     <section aria-labelledby="daily-heading">
-      {/* Same header row as the Server section: the title on the left, a quiet button on the right (here: the All apps window). */}
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id="daily-heading" className="text-sm font-medium text-muted-foreground">
-          Your apps
-        </h2>
+      {/* The title "Apps ›" is itself the button that opens the All apps window (components/all-apps.tsx). */}
+      <div className="mb-3">
         <AllApps />
       </div>
       {/* Phone: three per row, the last short row centred (5 apps would otherwise leave

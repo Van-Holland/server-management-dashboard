@@ -1,13 +1,13 @@
 "use client"
 
 import { useMemo, useRef, useState, type CSSProperties } from "react"
-import { Dumbbell, LayoutGrid, Search, X } from "lucide-react"
+import { ChevronRight, Dumbbell, Search, X } from "lucide-react"
 import { DAILY, FINDERS, TOOLS, type AppEntry } from "@/lib/apps"
 
 /**
  * The "All apps" button and its popup (added 2026-11-21, replaces the old Tools list at the bottom of the home page).
  *
- * One window with every app under a heading per category, like the app library on an iPad: Your apps, Finders, then the
+ * One window with every app under a heading per category, like the app library on an iPad: Apps, Finders, then the
  * groups from lib/apps.ts (Knowledge, Household, Utilities, System, Arr stack, Downloaders). A search box on top narrows
  * it by name, description or the extra words per app, the same words the Cmd+K launcher uses. Native <dialog> and the same
  * open/close animation as the Finders folder (globals.css, `dialog.finders`), so Esc, focus and screen readers come for free.
@@ -19,7 +19,7 @@ const focusRing =
 type Section = { title: string; apps: AppEntry[] }
 
 const SECTIONS: Section[] = [
-  { title: "Your apps", apps: DAILY },
+  { title: "Apps", apps: DAILY },
   { title: "Finders", apps: FINDERS },
   ...TOOLS.map((group) => ({ title: group.title, apps: group.tools })),
 ]
@@ -94,17 +94,22 @@ export function AllApps() {
 
   return (
     <>
-      {/* Same look as "All details" in the Server section (components/live-cards.tsx): a quiet text button with a small icon. */}
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={open}
-        aria-haspopup="dialog"
-        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        All apps
-        <LayoutGrid className="size-4" aria-hidden="true" />
-      </button>
+      {/* The section title is the button (design D, 2026-11-21): "Apps ›". It opens the window below. */}
+      <h2 id="daily-heading" className="text-sm font-medium">
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={open}
+          aria-haspopup="dialog"
+          className="group inline-flex items-center gap-1 rounded-lg py-1 pr-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Apps
+          <ChevronRight
+            className="size-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </button>
+      </h2>
 
       <dialog
         ref={dialogRef}

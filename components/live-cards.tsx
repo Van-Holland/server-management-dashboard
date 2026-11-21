@@ -7,8 +7,7 @@ import {
   ArrowDown,
   ArrowUp,
   BatteryWarning,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
   Cloud,
   Cpu,
   Database,
@@ -880,31 +879,23 @@ export function LiveCards({ initial, children }: { initial: InitialStats; childr
 
   return (
     <section aria-labelledby="server-heading">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id="server-heading" className="text-sm font-medium text-muted-foreground">
-          Server
+      <div className="mb-3">
+        {/* The title is the toggle (design D, 2026-11-21): "Server ›", and the arrow turns down when the details are open. */}
+        <h2 id="server-heading" className="text-sm font-medium">
+          <button
+            type="button"
+            onClick={() => setExpanded((open) => !open)}
+            aria-expanded={expanded}
+            aria-controls="server-details"
+            className="group inline-flex items-center gap-1 rounded-lg py-1 pr-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Server
+            <ChevronRight
+              className={`size-4 text-muted-foreground transition-transform duration-300 ${expanded ? "rotate-90" : "group-hover:translate-x-0.5"}`}
+              aria-hidden="true"
+            />
+          </button>
         </h2>
-        {/* Stays in the same place in both states, so it does not jump when the
-            content below changes. */}
-        <button
-          type="button"
-          onClick={() => setExpanded((open) => !open)}
-          aria-expanded={expanded}
-          aria-controls="server-details"
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {expanded ? (
-            <>
-              Show less
-              <ChevronUp className="size-4" aria-hidden="true" />
-            </>
-          ) : (
-            <>
-              All details
-              <ChevronDown className="size-4" aria-hidden="true" />
-            </>
-          )}
-        </button>
       </div>
 
       {/* Both are always in the page. Opening slides the summary away and the full
