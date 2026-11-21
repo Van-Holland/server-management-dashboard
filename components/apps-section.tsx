@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react"
 import { Dumbbell } from "lucide-react"
+import { AllApps } from "@/components/all-apps"
 import { AmbientTrigger } from "@/components/ambient-trigger"
 import { FindersFolder } from "@/components/finders-folder"
 import { DAILY, type AppEntry } from "@/lib/apps"
@@ -56,9 +57,13 @@ function DailyTile({ app, index }: { app: AppEntry; index: number }) {
 export function DailyApps() {
   return (
     <section aria-labelledby="daily-heading">
-      <h2 id="daily-heading" className="mb-3 text-sm font-medium text-muted-foreground">
-        Your apps
-      </h2>
+      {/* Same header row as the Server section: the title on the left, a quiet button on the right (here: the All apps window). */}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 id="daily-heading" className="text-sm font-medium text-muted-foreground">
+          Your apps
+        </h2>
+        <AllApps />
+      </div>
       {/* Phone: three per row, the last short row centred (5 apps would otherwise leave
           a lopsided gap on the right). */}
       <div className="flex flex-wrap justify-center gap-x-2 gap-y-7 sm:grid sm:grid-cols-5 sm:justify-items-center sm:gap-x-4">
