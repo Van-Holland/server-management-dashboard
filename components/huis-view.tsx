@@ -148,7 +148,7 @@ function HeatingCard({ heating, plan, refresh }: { heating: HeatingState; plan: 
               The rules keep it at {plan.dayTemp}° or more from {plan.dayStart} to {plan.eveningStart}, and at {plan.nightTemp}° from {plan.nightStart} to morning. Change this on the Plan tab.
             </p>
           ) : (
-            <p className="mt-3 max-w-xs text-xs text-muted-foreground">The safety rules keep it at 21° or more from 06:05 to 17:00, and at 16° from 22:05 to 05:29.</p>
+            <p className="mt-3 max-w-xs text-xs text-muted-foreground">The safety rules keep it at 20° or more from 07:05 to 17:00, and at 16° from 22:05 to 05:29.</p>
           )}
         </div>
 

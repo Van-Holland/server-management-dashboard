@@ -7,12 +7,12 @@ export const HEATING = {
 } as const
 
 /**
- * The Remeha app's program, same every day (set by Matthijs 2026-11-21): 06:00 -> 21, 17:00 -> 16, 22:00 -> 16.
+ * The Remeha app's program, same every day (set by Matthijs 2026-11-21): 07:00 -> 20, 17:00 -> 16, 22:00 -> 16 (changed 2026-11-22: the floor overshoots the target by 1 to 1.5 degrees, so aim lower and later).
  * Drawn on the day bar. If the program in the app changes, change it here too; Home Assistant cannot read it.
  */
 export const SCHEDULE_START_TARGET = 16
 export const SCHEDULE_POINTS: { at: number; target: number }[] = [
-  { at: 6 * 60, target: 21 },
+  { at: 7 * 60, target: 20 },
   { at: 17 * 60, target: 16 },
   { at: 22 * 60, target: 16 },
 ]
