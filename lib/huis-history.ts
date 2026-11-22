@@ -117,19 +117,31 @@ function commonTarget(rows: Row[], a: number, b: number): number | null {
   return best
 }
 
-/** First time in the window that the target jumped up by 3 degrees or more, and how long the room took to come within 0.3 of it. */
-export function warmup(rows: Row[], a: number, b: number): { minutes: number; target: number } | null {
+/**
+ * The morning warm-up. It starts when the boiler begins its run in the early morning (the thermostat starts early on its own, before
+ * the program's switch) and ends when the room first gets within 0.3 degrees of the day's target. The overshoot is how far the room
+ * climbs above the target afterwards (a floor keeps heating after the boiler stops). `a` is midnight of the day.
+ */
+export function warmup(rows: Row[], a: number): { minutes: number; target: number; fromMin: number; overshoot: number } | null {
+  const from = a + 1 * HOUR
+  const to = a + 12 * HOUR
+  const targets = rows.filter((r) => r.t >= a + 4 * HOUR && r.t <= to && r.target !== null).map((r) => r.target as number)
+  if (targets.length === 0) return null
+  const target = Math.max(...targets)
+  if (target < 18) return null
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
-    if (row.t < a || row.t > b || row.target === null || rows[i - 1].target === null) continue
-    if (row.target - (rows[i - 1].target as number) < 3) continue
-    const start = row.t
+    if (row.t < from || row.t > to || row.action !== "heating" || rows[i - 1].action === "heating") continue
     const startRoom = row.room ?? rows[i - 1].room
-    // A real warm-up starts well below the target; a small nudge is not one.
-    if (startRoom === null || startRoom > row.target - 2) continue
+    // A real warm-up starts at least a degree below the target.
+    if (startRoom === null || startRoom > target - 1) continue
     for (let j = i; j < rows.length; j++) {
-      if (rows[j].target !== null && rows[j].target !== row.target) return null // the target changed again before the room got there
-      if (rows[j].room !== null && (rows[j].room as number) >= row.target - 0.3) return { minutes: Math.round((rows[j].t - start) / 60_000), target: row.target }
+      if (rows[j].t > a + 14 * HOUR) return null
+      if (rows[j].room !== null && (rows[j].room as number) >= target - 0.3) {
+        let peak = rows[j].room as number
+        for (let k = j; k < rows.length && rows[k].t <= rows[j].t + 3 * HOUR; k++) if (rows[k].room !== null && (rows[k].room as number) > peak) peak = rows[k].room as number
+        return { minutes: Math.round((rows[j].t - row.t) / 60_000), target, fromMin: Math.round((row.t - a) / 60_000), overshoot: Math.max(0, round(peak - target, 1)) }
+      }
     }
     return null
   }
@@ -192,7 +204,7 @@ export function buildDayStat(rows: Row[], weather: Sample[], gas: MinimalRow[] |
     }
   }
 
-  const w = warmup(rows, a, a + 14 * HOUR)
+  const w = warmup(rows, a)
   return {
     date: dayKey(day),
     partial: end < fullEnd,
@@ -206,6 +218,8 @@ export function buildDayStat(rows: Row[], weather: Sample[], gas: MinimalRow[] |
     night,
     warmupMin: w?.minutes ?? null,
     warmupTarget: w?.target ?? null,
+    warmupFromMin: w?.fromMin ?? null,
+    overshoot: w?.overshoot ?? null,
   }
 }
 
@@ -295,6 +309,8 @@ export async function loadHistory(now: Date, gasEntity?: string): Promise<Histor
       stat.scoreGas = null
       stat.warmupMin = null
       stat.warmupTarget = null
+      stat.warmupFromMin = null
+      stat.overshoot = null
     }
     if (day.getTime() - 2 * HOUR < coverage) stat.night = null
     fresh.push(stat)

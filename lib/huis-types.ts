@@ -47,9 +47,13 @@ export type DayStat = {
   scoreGas: number | null
   /** The night cycle that ended this evening: 22:00 yesterday to 22:00 today, filed under the night setting that held in between. */
   night: { target: number | null; boilerMin: number; outsideAvg: number | null; degreeDays: number | null; gasM3: number | null; scoreHours: number | null; scoreGas: number | null } | null
-  /** Minutes from the first big target rise of the day until the room was near it. */
+  /** Morning warm-up: minutes from the boiler's early run starting until the room was within 0.3 degrees of the day target. */
   warmupMin: number | null
   warmupTarget: number | null
+  /** Minute of the day the warm-up run started. */
+  warmupFromMin: number | null
+  /** Degrees the room climbed above the target afterwards. */
+  overshoot: number | null
 }
 
 export const DEGREE_DAY_BASE = 18

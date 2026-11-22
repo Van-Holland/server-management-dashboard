@@ -225,8 +225,10 @@ function demoDays(now: Date): { days: DayStat[]; yesterday: DayDetail; today: Da
       scoreHours: round(boilerMin / 60 / dd, 3),
       scoreGas: null,
       night: partial ? null : { target: nightTarget, boilerMin: cycleMin, outsideAvg: avg, degreeDays: round(dd, 2), gasM3: null, scoreHours: round(cycleMin / 60 / dd, 3), scoreGas: null },
-      warmupMin: 70 + Math.round(15 * Math.sin(back)),
-      warmupTarget: 21,
+      warmupMin: 150 + Math.round(20 * Math.sin(back)),
+      warmupTarget: 20,
+      warmupFromMin: 4 * 60,
+      overshoot: round(1 + 0.4 * Math.sin(back), 1),
     })
   }
   const nowMin = minuteOfDay(now)

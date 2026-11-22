@@ -93,7 +93,7 @@ export function TodayTab({ snapshot }: { snapshot: HuisSnapshot }) {
   const yest = days[days.length - 2]
   const read = hover !== null && hover <= day.nowMin ? hover : null
   const roomNow = roomAt(day, day.nowMin)
-  const warm = [...days].reverse().find((d) => d.warmupMin !== null)
+  const warm = [...days].reverse().find((d) => d.warmupMin != null)
 
   return (
     <div>
@@ -101,7 +101,11 @@ export function TodayTab({ snapshot }: { snapshot: HuisSnapshot }) {
         <Chip label="Room" value={roomNow !== null ? `${roomNow.toFixed(1)}°` : "—"} />
         <Chip label="Outside" value={outsideNow !== null ? `${outsideNow.toFixed(1)}°` : "—"} note={outsideNow === null ? "no data yet" : undefined} />
         <Chip label="Boiler today" value={today ? hoursText(today.boilerMin) : "—"} note={today && yest ? `yesterday ${hoursText(yest.boilerMin)} in total` : undefined} />
-        <Chip label="Warm-up" value={warm?.warmupMin != null ? hoursText(warm.warmupMin) : "—"} note={warm?.warmupMin != null ? `to ${warm.warmupTarget}°, ${warm === today ? "today" : "on " + warm.date.slice(5)}` : "target rise 3° or more"} />
+        <Chip
+          label="Morning warm-up"
+          value={warm?.warmupMin != null ? hoursText(warm.warmupMin) : "—"}
+          note={warm?.warmupMin != null ? `from ${clock(warm.warmupFromMin ?? 0)} to ${warm.warmupTarget}°, ${warm.overshoot != null ? `+${warm.overshoot.toFixed(1)}° over` : ""} (${warm === today ? "today" : warm.date.slice(5)})` : "boiler start until the room hits the target"}
+        />
       </div>
 
       <p className="mt-4 min-h-5 text-xs text-muted-foreground" aria-live="polite">
